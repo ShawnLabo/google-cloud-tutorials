@@ -203,7 +203,7 @@ gcloud functions logs read functions-storage-python \
 プロジェクトを削除する場合はここの手順は不要です。
 このパートはスキップしてプロジェクトを削除してください。
 
-プロジェクトを残す場合は次の手順を実行して Cloud Storage のバケットと Cloud Functions の関数を削除します。
+プロジェクトを残す場合は次の手順を実行して Cloud Storage のバケットと Cloud Functions の関数とサービスアカウントを削除します。
 
 
 ```
@@ -212,6 +212,8 @@ gsutil rb gs://$BUCKET_NAME
 gcloud functions delete functions-storage-python \
   --project $PROJECT_ID \
   --region asia-northeast1
+gcloud iam service-accounts delete $SERVICE_ACCOUNT \
+  --project $PROJECT_ID
 ```
 
 ## まとめ
