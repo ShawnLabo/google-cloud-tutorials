@@ -1,18 +1,37 @@
 # Cloud Functions から Cloud Storage を利用する (Python)
 
-## チュートリアルの概要
+## さあ始めましょう
 
-このチュートリアルは Cloud Functions にデプロイしたアプリケーションで Cloud Storage のファイルを操作することが目標です。
-Cloud Functions の Python ランタイムを利用します。
+このチュートリアルでは Cloud Storage のファイルを操作する Cloud Functions アプリケーションの構築を学びます。
+Cloud Functions の Python ランタイムを使用します。
 
-以下を順に行います。
+このガイドでは、以下の内容を説明します。
 
-* Cloud Storage の準備
-* サービスアカウントの作成とロールの付与
-* Cloud Functions アプリケーションの確認
-* Cloud Functions アプリケーションのデプロイ
-* Cloud Functions アプリケーションの実行
-* Cloud Functions アプリケーションのログ確認
+* gsutil コマンドを使った Cloud Storage に対する操作
+* gcloud コマンドを使った Cloud Functions に対する操作
+* gcloud コマンドを使ったサービスアカウントの作成と IAM ロールの付与
+* [Python Client for Google Cloud Storage](https://googleapis.dev/python/storage/latest/index.html)の使い方
+
+
+**所要時間**: 約15分
+**前提条件**: Google Cloud アカウントとプロジェクト
+
+右下のボタンをクリックしてチュートリアルを開始しましょう！
+
+
+## チュートリアルの進め方
+
+このチュートリアルではコマンドやコードのスニペットが次のようなコードボックスに表示されます。
+このようなコマンドは Cloud Shell のターミナルで実行することができます。
+今すぐ次のコマンドを実行してみてください。
+
+```bash
+gcloud version
+```
+
+**ヒント**: コードボックスの横にあるコピーボタンをクリックして、コマンドを Cloud Shell ターミナルに貼り付けて実行します。
+
+ステップを前後に移動するには、[戻る] と [続行] / [進む] の各ボタンを使用します。
 
 
 ## アプリケーションの概要
@@ -23,20 +42,25 @@ Cloud Functions の Python ランタイムを利用します。
 
 アプリケーションは HTTP 関数として実行されます。
 
+次のステップに進み、チュートリアルの設定を開始します。
+
 
 ## プロジェクトを設定する
 
-チュートリアルを開始する前に、このチュートリアルで使用するプロジェクトを設定してください。
+チュートリアルを開始する前に、このチュートリアルで使用するプロジェクトを設定します。
+まだプロジェクトを作成していない場合は作成してください。
 
-プロジェクト一覧の確認:
 
-```
+プロジェクト一覧の確認するために次のコマンドを実行します。
+
+```bash
 gcloud projects list
 ```
 
-利用するプロジェクトを環境変数に設定 (`YOUR-PROJECT-ID` は実際のプロジェクトIDに置き換えてください):
+利用するプロジェクトを選択して環境変数に設定します。
+`YOUR-PROJECT-ID` は実際のプロジェクトIDに置き換えてください。
 
-```
+```bash
 export PROJECT_ID="YOUR-PROJECT-ID"
 ```
 
@@ -45,7 +69,7 @@ export PROJECT_ID="YOUR-PROJECT-ID"
 
 チュートリアルに必要な API を有効化します。
 
-```
+```bash
 gcloud services enable \
   --project $PROJECT_ID \
   cloudbuild.googleapis.com
@@ -56,45 +80,51 @@ gcloud services enable \
 
 チュートリアルで使用する Cloud Storage のバケットを作成して、そのバケット内にカウンターファイルをアップロードします。
 
-まず、バケットの名前を環境変数に設定してください。
+まず、今後何度も利用するバケット名を環境変数に設定します。
 
-```
+```bash
 export BUCKET_NAME="${PROJECT_ID}-functions-tutorial"
 ```
 
 そのバケット名でバケットを作成します。
 
-```
-gsutil mb -p $PROJECT_ID -l ASIA-NORTHEAST1 gs://$BUCKET_NAME
+```bash
+gsutil mb \
+  -p $PROJECT_ID \
+  -l ASIA-NORTHEAST1 gs://$BUCKET_NAME
 ```
 
-カウンターファイルを作成し、バケットにアップロードします。
+カウンターファイルを作成してバケットにアップロードします。
 
-```
+```bash
 echo 0 > counter.txt
-gsutil cp counter.txt gs://$BUCKET_NAME/counter.txt
+gsutil cp \
+  counter.txt \
+  gs://$BUCKET_NAME/counter.txt
 ```
 
 ## サービスアカウントの作成とロールの付与
 
-Cloud Functions で使用するサービスアカウントを作成して、Cloud Storage を操作するためのロールを付与します。
+Cloud Functions のアプリケーション (関数) で使用するサービスアカウントを作成して、Cloud Storage を操作するためのロールを付与します。
 
-まず、サービスアカウントを作成します。
+Cloud Functions のアプリケーションで使用するサービスアカウントを作成します。
 
-```
-gcloud iam service-accounts create functions-storage-python --project $PROJECT_ID
+```bash
+gcloud iam service-accounts create \
+  functions-storage-python \
+  --project $PROJECT_ID
 ```
 
 このサービスアカウントを環境変数に設定しておきます。
 
-```
+```bash
 export SERVICE_ACCOUNT="functions-storage-python@$PROJECT_ID.iam.gserviceaccount.com"
 ```
 
 このサービスアカウントに `$BUCKET_NAME` バケットに対するオブジェクト管理者ロールを付与します。
 これにより、このサービスアカウントで `$BUCKET_NAME` バケットのオブジェクトの閲覧や作成、削除ができるようになります。
 
-```
+```bash
 gsutil iam ch \
   serviceAccount:${SERVICE_ACCOUNT}:roles/storage.legacyObjectReader \
   gs://$BUCKET_NAME
@@ -103,87 +133,107 @@ gsutil iam ch \
   gs://$BUCKET_NAME
 ```
 
-参考: [Cloud Storage に適用される IAM のロール](https://cloud.google.com/storage/docs/access-control/iam-roles?hl=ja)
+**参考**: [Cloud Storage に適用される IAM のロール](https://cloud.google.com/storage/docs/access-control/iam-roles?hl=ja)
 
 ## Cloud Functions アプリケーションの確認
 
 このチュートリアルでは予め完成されたソースコード (`main.py`) を使用します。
-次のコマンドによりエディタで `main.py` を開き、ソースコードを確認してください。
+次のコマンドによりエディタで `main.py` を開いてソースコードを確認します。
 
-```
+```bash
 cloudshell edit main.py
 ```
+
+**確認項目**:
+
+* バケット名はどうやって指定していますか？
+* ログはどうやって出力していますか？
+* Cloud Storage からどうやってデータを取得していますか？
+* Cloud Storage にどうやってデータをアップロードしていますか？
+
+ソースコードを理解したら次に進みます。
 
 
 ## Cloud Functions アプリケーションのデプロイ
 
 アプリケーションを Cloud Functions にデプロイします。
 
-デプロイは `gcloud functions deploy` コマンドをラップしたデプロイスクリプト (`deploy.sh`) を使用します。
-エディタで `deploy.sh` を開き、コマンドを確認してください。
+デプロイは `gcloud functions deploy` コマンドをラップしたスクリプト (`deploy.sh`) を使用します。
+エディタで `deploy.sh` を開いてコマンドを確認してます。
 
-```
+```bash
 cloudshell edit deploy.sh
 ```
 
-コマンドを理解したら、`deploy.sh` を実行してデプロイしてください。
+**確認項目**:
 
-```
+* どのプロジェクトにデプロイしていますか？
+* どのリージョンにデプロイしていますか？
+* ランタイムは何ですか？
+* 関数を実行するトリガーは何ですか？
+* エントリーポイントは何ですか？
+* 関数のサービスアカウントは何ですか？
+* どのような環境変数を設定していますか？
+
+コマンドを理解したら `deploy.sh` を実行してアプリケーションをデプロイします。
+
+```bash
 bash deploy.sh
 ```
 
 
 ## Cloud Functions アプリケーションの実行
 
-アプリケーションを実行して、Cloud Storage オブジェクトの内容を確認します。
+アプリケーションを実行して Cloud Storage オブジェクトの内容が変化したか確認します。
 
-まず、実行前のカウントを確認します。
+まず実行前のカウントを確認します。
 
-```
+```bash
 gsutil cat gs://$BUCKET_NAME/counter.txt
 ```
 
-アプリケーションを実行します。
-gcloudコマンドを使うことで簡単に実行することができます。
+`gcloud functions call` コマンドで簡単にアプリケーションを実行できます。
 
-```
-gcloud functions call functions-storage-python \
+```bash
+gcloud functions call \
+  functions-storage-python \
   --project $PROJECT_ID \
   --region asia-northeast1
 ```
 
-再度、カウントを確認します。
+カウントを確認します。
 アプリケーションが正しく実行されていれば、先程確認したカウントに 1 足された値が表示されます。
 
-```
+```bash
 gsutil cat gs://$BUCKET_NAME/counter.txt
 ```
 
-また、`curl` コマンドを使って Cloud Functions で発行された URL に対してリクエストを送り、アプリケーションを実行してみます。
+次に、Cloud Functions 関数に発行された URL に対して `curl` コマンドでリクエストしてアプリケーションを実行します。
 
-Cloud Functions の URL は次のコマンドで確認できます。
+Cloud Functions の URL を次のコマンドで確認します。
 
-```
-gcloud functions describe functions-storage-python \
+```bash
+gcloud functions describe \
+  functions-storage-python \
   --project $PROJECT_ID \
   --region asia-northeast1 \
   --format='value(httpsTrigger.url)'
 ```
 
-URL に `curl` でリクエストします。
+確認した URL に `curl` でリクエストします。
 
-```
+```bash
 curl -i "$(gcloud functions describe functions-storage-python  --project $PROJECT_ID --region asia-northeast1 --format='value(httpsTrigger.url)')"
 ```
 
-もう一度カウントを確認してみましょう。
+もう一度カウントを確認します。
 
 ```
 gsutil cat gs://$BUCKET_NAME/counter.txt
 ```
 
 URL をブラウザで開いてもカウントが変化します。
-試してみてください。
+試してみましょう。
 
 
 ## Cloud Functions アプリケーションのログ確認
@@ -191,10 +241,11 @@ URL をブラウザで開いてもカウントが変化します。
 アプリケーションのログを確認します。
 Cloud Functions では stdout または stderr に出力された内容がログとして記録されます。
 
-次のコマンドで Cloud Functions にデプロイされたアプリケーションのログを表示できます。
+次のコマンドで Cloud Functions にデプロイされたアプリケーションのログを表示します。
 
-```
-gcloud functions logs read functions-storage-python \
+```bash
+gcloud functions logs read \
+  functions-storage-python \
   --project $PROJECT_ID \
   --region asia-northeast1
 ```
@@ -204,13 +255,10 @@ gcloud functions logs read functions-storage-python \
 ## クリーンアップ
 
 チュートリアルで作成したリソースを削除します。
-プロジェクトを削除する場合はここの手順は不要です。
-このパートはスキップしてプロジェクトを削除してください。
 
-プロジェクトを残す場合は次の手順を実行して Cloud Storage のバケットと Cloud Functions の関数とサービスアカウントを削除します。
+Cloud Storage のバケットと Cloud Functions の関数とサービスアカウントを削除するために次のコマンドを実行します。
 
-
-```
+```bash
 gsutil rm gs://$BUCKET_NAME/counter.txt
 gsutil rb gs://$BUCKET_NAME
 gcloud functions delete functions-storage-python \
@@ -220,7 +268,14 @@ gcloud iam service-accounts delete $SERVICE_ACCOUNT \
   --project $PROJECT_ID
 ```
 
+**ヒント**: 確認プロンプトが表示された場合は `Y` を入力します。
+
 ## まとめ
 
 以上でチュートリアルは完了です。
+チュートリアルでは次の内容を説明しました。
 
+* gsutil コマンドを使った Cloud Storage に対する操作
+* gcloud コマンドを使った Cloud Functions に対する操作
+* gcloud コマンドを使ったサービスアカウントの作成と IAM ロールの付与
+* [Python Client for Google Cloud Storage](https://googleapis.dev/python/storage/latest/index.html)の使い方
