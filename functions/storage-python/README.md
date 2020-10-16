@@ -107,7 +107,8 @@ gsutil iam ch \
 
 ## Cloud Functions アプリケーションの確認
 
-エディタで今回のアプリケーションのソースコードを確認してください。
+このチュートリアルでは予め完成されたソースコード (`main.py`) を使用します。
+次のコマンドによりエディタで `main.py` を開き、ソースコードを確認してください。
 
 ```
 cloudshell edit main.py
@@ -118,14 +119,14 @@ cloudshell edit main.py
 
 アプリケーションを Cloud Functions にデプロイします。
 
-デプロイは `gcloud` コマンドをラップしたデプロイスクリプトを使用します。
-エディタでデプロイスクリプトを確認してください。
+デプロイは `gcloud functions deploy` コマンドをラップしたデプロイスクリプト (`deploy.sh`) を使用します。
+エディタで `deploy.sh` を開き、コマンドを確認してください。
 
 ```
 cloudshell edit deploy.sh
 ```
 
-スクリプトを実行してデプロイしてください。
+コマンドを理解したら、`deploy.sh` を実行してデプロイしてください。
 
 ```
 bash deploy.sh
