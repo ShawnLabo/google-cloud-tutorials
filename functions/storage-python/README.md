@@ -109,7 +109,9 @@ gsutil iam ch \
 
 エディタで今回のアプリケーションのソースコードを確認してください。
 
-<walkthrough-editor-open-file filePath="main.py"></walkthrough-editor-open-file>
+```
+cloudshell edit main.py
+```
 
 
 ## Cloud Functions アプリケーションのデプロイ
@@ -119,7 +121,9 @@ gsutil iam ch \
 デプロイは `gcloud` コマンドをラップしたデプロイスクリプトを使用します。
 エディタでデプロイスクリプトを確認してください。
 
-<walkthrough-editor-open-file filePath="deploy.sh"></walkthrough-editor-open-file>
+```
+cloudshell edit deploy.sh
+```
 
 スクリプトを実行してデプロイしてください。
 
