@@ -194,3 +194,25 @@ gcloud functions logs read functions-storage-python \
 ```
 
 参考: [ログの作成、表示、処理](https://cloud.google.com/functions/docs/monitoring/logging?hl=ja)
+
+## クリーンアップ
+
+チュートリアルで作成したリソースを削除します。
+プロジェクトを削除する場合はここの手順は不要です。
+このパートはスキップしてプロジェクトを削除してください。
+
+プロジェクトを残す場合は次の手順を実行して Cloud Storage のバケットと Cloud Functions の関数を削除します。
+
+
+```
+gsutil rm gs://$BUCKET_NAME/counter.txt
+gsutil rb gs://$BUCKET_NAME
+gcloud functions delete functions-storage-python \
+  --project $PROJECT_ID \
+  --region asia-northeast1
+```
+
+## まとめ
+
+以上でチュートリアルは完了です。
+
