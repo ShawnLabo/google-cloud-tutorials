@@ -182,6 +182,9 @@ curl -i "$(gcloud functions describe functions-storage-python  --project $PROJEC
 gsutil cat gs://$BUCKET_NAME/counter.txt
 ```
 
+URL をブラウザで開いてもカウントが変化します。
+試してみてください。
+
 
 ## Cloud Functions アプリケーションのログ確認
 
