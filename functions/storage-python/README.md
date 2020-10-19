@@ -14,6 +14,7 @@ Cloud Functions の Python ランタイムを使用します。
 
 
 **所要時間**: 約15分
+
 **前提条件**: Google Cloud アカウントとプロジェクト
 
 右下のボタンをクリックしてチュートリアルを開始しましょう！
@@ -72,7 +73,8 @@ export PROJECT_ID="YOUR-PROJECT-ID"
 ```bash
 gcloud services enable \
   --project $PROJECT_ID \
-  cloudbuild.googleapis.com
+  cloudbuild.googleapis.com \
+  cloudfunctions.googleapis.com
 ```
 
 
@@ -94,10 +96,16 @@ gsutil mb \
   -l ASIA-NORTHEAST1 gs://$BUCKET_NAME
 ```
 
-カウンターファイルを作成してバケットにアップロードします。
+Cloud Storage にアップロードするためのカウンターファイルを作成します。
+初期値は `0` にします。
 
 ```bash
 echo 0 > counter.txt
+```
+
+`gsutil cp` コマンドで作成したカウンターファイルを Cloud Storage にアップロードします。
+
+```bash
 gsutil cp \
   counter.txt \
   gs://$BUCKET_NAME/counter.txt
@@ -121,13 +129,20 @@ gcloud iam service-accounts create \
 export SERVICE_ACCOUNT="functions-storage-python@$PROJECT_ID.iam.gserviceaccount.com"
 ```
 
-このサービスアカウントに `$BUCKET_NAME` バケットに対するオブジェクト管理者ロールを付与します。
+このサービスアカウントに `$BUCKET_NAME` バケットに対するロールを付与します。
 これにより、このサービスアカウントで `$BUCKET_NAME` バケットのオブジェクトの閲覧や作成、削除ができるようになります。
+
+Storage レガシーオブジェクト読み取りロール (`roles/storage.legacyObjectReader`) でオブジェクトとそのメタデータを閲覧するための権限を付与します。
 
 ```bash
 gsutil iam ch \
   serviceAccount:${SERVICE_ACCOUNT}:roles/storage.legacyObjectReader \
   gs://$BUCKET_NAME
+```
+
+Storage レガシーバケット書き込みロール (`roles/storage.legacyBucketWriter`) でバケット内にオブジェクトを作成、置き換え、削除するための権限を付与します。
+
+```bash
 gsutil iam ch \
   serviceAccount:${SERVICE_ACCOUNT}:roles/storage.legacyBucketWriter \
   gs://$BUCKET_NAME
@@ -135,9 +150,10 @@ gsutil iam ch \
 
 **参考**: [Cloud Storage に適用される IAM のロール](https://cloud.google.com/storage/docs/access-control/iam-roles?hl=ja)
 
+
 ## Cloud Functions アプリケーションの確認
 
-このチュートリアルでは予め完成されたソースコード (`main.py`) を使用します。
+Cloud Functions アプリケーションとしてあらかじめ完成されたソースコード (`main.py`) を使用します。
 次のコマンドによりエディタで `main.py` を開いてソースコードを確認します。
 
 ```bash
@@ -159,7 +175,7 @@ cloudshell edit main.py
 アプリケーションを Cloud Functions にデプロイします。
 
 デプロイは `gcloud functions deploy` コマンドをラップしたスクリプト (`deploy.sh`) を使用します。
-エディタで `deploy.sh` を開いてコマンドを確認してます。
+デプロイする前にエディタで `deploy.sh` を開いてコマンドの詳細を確認します。
 
 ```bash
 cloudshell edit deploy.sh
@@ -228,7 +244,7 @@ curl -i "$(gcloud functions describe functions-storage-python  --project $PROJEC
 
 もう一度カウントを確認します。
 
-```
+```bash
 gsutil cat gs://$BUCKET_NAME/counter.txt
 ```
 
@@ -252,6 +268,7 @@ gcloud functions logs read \
 
 参考: [ログの作成、表示、処理](https://cloud.google.com/functions/docs/monitoring/logging?hl=ja)
 
+
 ## クリーンアップ
 
 チュートリアルで作成したリソースを削除します。
@@ -269,6 +286,7 @@ gcloud iam service-accounts delete $SERVICE_ACCOUNT \
 ```
 
 **ヒント**: 確認プロンプトが表示された場合は `Y` を入力します。
+
 
 ## まとめ
 
