@@ -10,43 +10,121 @@ id: doc
 
 ---
 
-# Anthos Config Management Tutorial
+# Anthos Config Management with GitLab
 
-## 準備
+## はじめに
 
-gcloudの準備
+注意: 本チュートリアルは非公式です。
+
+複数の GKE クラスタを Anthos Config Management によりGitLabのリポジトリで管理するチュートリアルです。
+
+## 前提条件と準備
+
+### 前提条件
+
+* Google Cloud アカウント
+* 有効な Billing Account と紐付いている Google Cloud プロジェクト
+  * プロジェクトごとクリーンアップできるように、本チュートリアル用の新規プロジェクトを用意することをおすすめします
+* 有効な Billing Account と紐付いている Google Cloud プロジェクト
+* Cloud SDK (gcloud)
+
+### 準備
+
+必要な gcloud コンポーネントをインストールしてください。
 
 ```bash
 gcloud components install kubectl alpha
 ```
 
-GKE APIの有効化
+使用するプロジェクトを設定してください。
 
 ```bash
-gcloud services enable container.googleapis.com
+gcloud config set project YOUR-PROJECT
 ```
 
-Anthos Config Managementの有効化
+## 本チュートリアルの構成
+
+本チュートリアルでは2つの GKE クラスタを1つの GitLab リポジトリで管理します。
+また、チュートリアル用に GitLab を構築します。
+
+## GitLab の構築
+
+スクリプトを使って GitLab を構築します。
 
 ```bash
-gcloud alpha container hub config-management enable
+curl -sL https://raw.githubusercontent.com/ShawnLabo/google-cloud-tutorials/main/anthos/config-management-with-gitlab/deploy_gitlab.sh | bash -
 ```
 
-## GitLabのデプロイ
+[Ingress 一覧](https://console.cloud.google.com/kubernetes/ingresses)から、**gitlab-webservice** Ingressをクリックしてください。
+バックエンドサービスのヘルスチェックが上手く成功しない場合は以下の手順でヘルスチェックを修正してください。
+
+* [ヘルスチェック一覧](https://console.cloud.google.com/compute/healthChecks)にアクセスする
+* パスが `/-/readiness` になっていないヘルスチェックがあればパスを `/-/readiness` に修正する
+
+ヘルスチェックやSSL証明書の作成が成功すれば GitLab にアクセスできるようになります。
+スクリプトの最後に表示された URL にアクセスし、 ユーザー名 `root` と表示されたパスワードでログインしてください。
+
+## GKE クラスタの作成
+
+ACMで管理する2つのクラスタを作成します。
+
+### クラスタ1 (asia-northeast1)
+
+1つ目のクラスタを asia-northeast1 (Tokyo) に作成します。
 
 ```bash
-gcloud container clusters create gitlab --region asia-northeast1
-gcloud container clusters get-credentials gitlab --region asia-northeast1
-
+gcloud container clusters create acm-cluster-1 \
+  --region asia-northeast1 \
+  --workload-pool $(gcloud config get-value project).svc.id.goog
 ```
 
-## Not yet
+操作しているユーザーに`cluster-admin`のロールを付与してクラスタを管理できるようにClusterRoleBindingを作成します。
 
 ```bash
-cluster=acm-cluster-1
-gcloud container clusters create $cluster --region asia-northeast1
-gcloud container clusters get-credentials $cluster --region asia-northeast1
+gcloud container clusters get-credentials acm-cluster-1 --region asia-northeast1
 kubectl create clusterrolebinding cluster-admin-binding \
   --clusterrole cluster-admin \
   --user $(gcloud config get-value account)
+```
+
+### クラスタ2 (us-centarl1)
+
+2つ目のクラスタを us-central1 (Iowa) に作成します。
+1つ目のクラスタと同様にClusterRoleBindingも作成します。
+
+```bash
+gcloud container clusters create acm-cluster-2 \
+  --region us-central1 \
+  --workload-pool $(gcloud config get-value project).svc.id.goog
+gcloud container clusters get-credentials $cluster --region us-central1
+kubectl create clusterrolebinding cluster-admin-binding \
+  --clusterrole cluster-admin \
+  --user $(gcloud config get-value account)
+```
+
+## GKE クラスタ を Anthos に登録
+
+各 GKE クラスタを Anthos に登録します。
+
+登録する前に Anthos と Anthos Config Management を有効化します。
+
+```bash
+gcloud services enable anthos.googleapis.com
+gcloud alpha container hub config-management enable
+```
+
+1つ目のクラスタを登録します。
+
+```bash
+gcloud beta container hub memberships register acm-cluster-1 \
+  --gke-cluster asia-northeast1/acm-cluster-1 \
+  --enable-workload-identity
+```
+
+同様に2つ目のクラスタを登録します。
+
+```bash
+gcloud beta container hub memberships register acm-cluster-2 \
+  --gke-cluster us-central1/acm-cluster-2 \
+  --enable-workload-identity
 ```
