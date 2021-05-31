@@ -157,6 +157,7 @@ kubectl apply -f /tmp/${project_id}-ingress.yaml
 password=$(kubectl get secret gitlab-gitlab-initial-root-password -o go-template='{{.data.password}}' | base64 -d)
 
 echo "********"
+echo "Fix healthcheck, then..."
 echo "Your GitLab URL is: https://${DOMAIN}"
 echo "Root password is: ${password}"
 echo "********"
