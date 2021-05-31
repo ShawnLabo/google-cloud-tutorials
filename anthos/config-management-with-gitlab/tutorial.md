@@ -18,8 +18,6 @@ id: doc
 
 複数の GKE クラスタを Anthos Config Management によりGitLabのリポジトリで管理するチュートリアルです。
 
-## 前提条件と準備
-
 ### 前提条件
 
 * Google Cloud アカウント
@@ -32,13 +30,13 @@ id: doc
 
 必要な gcloud コンポーネントをインストールしてください。
 
-```bash
+```console
 gcloud components install kubectl alpha
 ```
 
 使用するプロジェクトを設定してください。
 
-```bash
+```console
 gcloud config set project YOUR-PROJECT
 ```
 
@@ -51,7 +49,7 @@ gcloud config set project YOUR-PROJECT
 
 スクリプトを使って GitLab を構築します。
 
-```bash
+```console
 curl -sL https://raw.githubusercontent.com/ShawnLabo/google-cloud-tutorials/main/anthos/config-management-with-gitlab/deploy_gitlab.sh | bash -
 ```
 
@@ -72,7 +70,7 @@ ACMで管理する2つのクラスタを作成します。
 
 1つ目のクラスタを asia-northeast1 (Tokyo) に作成します。
 
-```bash
+```console
 gcloud container clusters create acm-cluster-1 \
   --region asia-northeast1 \
   --workload-pool $(gcloud config get-value project).svc.id.goog
@@ -80,7 +78,7 @@ gcloud container clusters create acm-cluster-1 \
 
 操作しているユーザーに`cluster-admin`のロールを付与してクラスタを管理できるようにClusterRoleBindingを作成します。
 
-```bash
+```console
 gcloud container clusters get-credentials acm-cluster-1 --region asia-northeast1
 kubectl create clusterrolebinding cluster-admin-binding \
   --clusterrole cluster-admin \
@@ -92,11 +90,11 @@ kubectl create clusterrolebinding cluster-admin-binding \
 2つ目のクラスタを us-central1 (Iowa) に作成します。
 1つ目のクラスタと同様にClusterRoleBindingも作成します。
 
-```bash
+```console
 gcloud container clusters create acm-cluster-2 \
   --region us-central1 \
   --workload-pool $(gcloud config get-value project).svc.id.goog
-gcloud container clusters get-credentials $cluster --region us-central1
+gcloud container clusters get-credentials acm-cluster-2 --region us-central1
 kubectl create clusterrolebinding cluster-admin-binding \
   --clusterrole cluster-admin \
   --user $(gcloud config get-value account)
@@ -108,14 +106,14 @@ kubectl create clusterrolebinding cluster-admin-binding \
 
 登録する前に Anthos と Anthos Config Management を有効化します。
 
-```bash
+```console
 gcloud services enable anthos.googleapis.com
 gcloud alpha container hub config-management enable
 ```
 
 1つ目のクラスタを登録します。
 
-```bash
+```console
 gcloud beta container hub memberships register acm-cluster-1 \
   --gke-cluster asia-northeast1/acm-cluster-1 \
   --enable-workload-identity
@@ -123,7 +121,7 @@ gcloud beta container hub memberships register acm-cluster-1 \
 
 同様に2つ目のクラスタを登録します。
 
-```bash
+```console
 gcloud beta container hub memberships register acm-cluster-2 \
   --gke-cluster us-central1/acm-cluster-2 \
   --enable-workload-identity
