@@ -1,0 +1,30 @@
+{
+  "environment": "web",
+  "format": "html",
+  "prefix": "https://storage.googleapis.com",
+  "mainga": "UA-49880327-14",
+  "updated": "2021-08-13T16:06:58+09:00",
+  "id": "global-app-with-anthos",
+  "duration": 47,
+  "title": "Global App with Anthos",
+  "summary": "Build a global scale application with Spanner and Multi Cluster Ingress",
+  "source": "README.md",
+  "theme": "",
+  "status": [
+    "[draft]"
+  ],
+  "category": [
+    "cloud",
+    "anthos"
+  ],
+  "tags": [
+    "anthos",
+    "cloud",
+    "gke",
+    "kubernetes",
+    "spanner"
+  ],
+  "feedback": "https://github.com/ShawnLabo/google-cloud-tutorials/issues",
+  "ga": "G-EFLGFLQ7TH",
+  "url": "global-app-with-anthos"
+}

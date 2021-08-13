@@ -1,0 +1,634 @@
+
+<!doctype html>
+
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, minimum-scale=1.0, initial-scale=1.0, user-scalable=yes">
+  <meta name="theme-color" content="#4F7DC9">
+  <meta charset="UTF-8">
+  <title>Global App with Anthos</title>
+  <link rel="stylesheet" href="//fonts.googleapis.com/css?family=Source+Code+Pro:400|Roboto:400,300,400italic,500,700|Roboto+Mono">
+  <link rel="stylesheet" href="//fonts.googleapis.com/icon?family=Material+Icons">
+  <link rel="stylesheet" href="https://storage.googleapis.com/codelab-elements/codelab-elements.css">
+  <style>
+    .success {
+      color: #1e8e3e;
+    }
+    .error {
+      color: red;
+    }
+  </style>
+</head>
+<body>
+  <google-codelab-analytics gaid="UA-49880327-14"></google-codelab-analytics>
+  <google-codelab codelab-gaid="G-EFLGFLQ7TH"
+                  id="global-app-with-anthos"
+                  title="Global App with Anthos"
+                  environment="web"
+                  feedback-link="https://github.com/ShawnLabo/google-cloud-tutorials/issues">
+    
+      <google-codelab-step label="はじめに" duration="1">
+        <aside class="warning"><p> このラボは Google Cloud の公式コンテンツではありません。</p>
+</aside>
+<h2 is-upgraded>前提条件</h2>
+<p>ラボを開始する前に以下のものをあらかじめ準備してください。</p>
+<ul>
+<li>Google Cloud アカウント</li>
+<li>ラボ用の Google Cloud プロジェクト  <ul>
+<li>有効な<a href="https://cloud.google.com/billing/docs/how-to/modify-project?hl=ja" target="_blank">請求先アカウント</a>に紐付いていることを確認してください</li>
+<li>ラボで作成したリソースをクリーンアップしやすいように新規プロジェクトの利用をおすすめします</li>
+</ul>
+</li>
+<li><a href="https://cloud.google.com/sdk" target="_blank">Cloud SDK</a> (<code>gcloud</code> コマンド)  <ul>
+<li><a href="https://cloud.google.com/shell" target="_blank">Cloud Shell</a> を利用する場合はすでにインストール済みです</li>
+<li>Cloud Shell 以外の環境で作業する場合はインストールされていることを確認してください</li>
+</ul>
+</li>
+</ul>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="このラボについて" duration="3">
+        <p>このラボではグローバルに分散されたマイクロブログ アプリケーションを構築します。 また、各地域のクライアントからどのようにアクセスされるかを確認します。</p>
+<p>アプリケーションとクライアントの外観を図にすると次のようになります。</p>
+<p class="image-container"><img alt="Overview" src="img/ecb53e693b5ae10c.png"></p>
+<p>このアプリケーションのアーキテクチャは以下の特徴があります。</p>
+<ul>
+<li>スケーラブル  <ul>
+<li>コンテナ化されていて <a href="https://cloud.google.com/kubernetes-engine" target="_blank">Google Kubernetes Engine</a> 上で実行されている</li>
+<li>データベースに <a href="https://cloud.google.com/spanner" target="_blank">Cloud Spanner</a> を利用している</li>
+</ul>
+</li>
+<li>低レイテンシ  <ul>
+<li>GKE クラスタがアメリカ、ヨーロッパ、アジアに分散されていて、地理的に近いクラスタで処理できる</li>
+<li>Spanner のノードが各クラスタと同じリージョンにあり、高速にデータの読み取りができる</li>
+</ul>
+</li>
+<li>単一 IP アドレス  <ul>
+<li>単一のエニーキャスト IP でのグローバルな負荷分散を実現するために <a href="https://cloud.google.com/load-balancing" target="_blank">Cloud Load Balancing</a> を利用している</li>
+<li>複数クラスタにまたがって分散するロードバランサを作成するために <a href="https://cloud.google.com/kubernetes-engine/docs/concepts/multi-cluster-ingress" target="_blank">Multi Cluster Ingress</a> を利用している</li>
+</ul>
+</li>
+<li>GitOps  <ul>
+<li>複数クラスタの管理を一元化するために GitOps を利用している</li>
+<li>GitOps を利用するために <a href="https://cloud.google.com/anthos-config-management/docs/config-sync-overview" target="_blank">Config Sync</a> を利用している</li>
+</ul>
+</li>
+</ul>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="準備" duration="3">
+        <h2 is-upgraded>プロジェクトの設定</h2>
+<p>使用するプロジェクトを設定してください。</p>
+<pre>gcloud config set project YOUR-PROJECT
+</pre>
+<h2 is-upgraded>API の有効化</h2>
+<p>利用するサービスの API を有効化してください。</p>
+<pre>gcloud services enable \
+  anthos.googleapis.com \
+  container.googleapis.com \
+  gkehub.googleapis.com \
+  multiclusteringress.googleapis.com \
+  sourcerepo.googleapis.com \
+  spanner.googleapis.com
+</pre>
+<h2 is-upgraded>Cloud SDK コンポーネントのインストール</h2>
+<aside class="special"><p> Cloud Shell を利用する場合は必要ありません。</p>
+</aside>
+<p>このラボで使用する Cloud SDK のコンポーネントをインストールしてください。</p>
+<pre>gcloud components install alpha beta kubectl nomos
+</pre>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="GKE クラスタの作成" duration="13">
+        <p>このセクションでは北アメリカ、ヨーロッパ、アジアのリージョンにそれぞれクラスタを1つずつ作成します。</p>
+<p><code>us-central1</code> (アイオワ) にクラスタを作成してください。</p>
+<pre>gcloud container clusters create us \
+  --enable-ip-alias \
+  --machine-type e2-standard-2 \
+  --num-nodes 1 \
+  --workload-pool=$(gcloud config get-value project).svc.id.goog \
+  --region us-central1
+</pre>
+<p><code>europe-west1</code> (ベルギー) にクラスタを作成してください。</p>
+<pre>gcloud container clusters create europe \
+  --enable-ip-alias \
+  --machine-type e2-standard-2 \
+  --num-nodes 1 \
+  --workload-pool=$(gcloud config get-value project).svc.id.goog \
+  --region europe-west1
+</pre>
+<p><code>asia-east1</code> (台湾) にクラスタを作成してください。</p>
+<pre>gcloud container clusters create asia \
+  --enable-ip-alias \
+  --machine-type e2-standard-2 \
+  --num-nodes 1 \
+  --workload-pool=$(gcloud config get-value project).svc.id.goog \
+  --region asia-east1
+</pre>
+<p>kubectl コマンドのクラスタ コンテキストの名前を変更してください。</p>
+<pre>kubectl config rename-context \
+  gke_$(gcloud config get-value project)_us-central1_us \
+  mb-us
+kubectl config rename-context \
+  gke_$(gcloud config get-value project)_europe-west1_europe \
+  mb-europe
+kubectl config rename-context \
+  gke_$(gcloud config get-value project)_asia-east1_asia \
+  mb-asia
+</pre>
+<aside class="special"><p> コンテキストの名前を変更することで、kubectlコマンドにおけるクラスタの変更が簡単になります。</p>
+</aside>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="Config Sync の構成" duration="11">
+        <p>このセクションでは作成した GKE クラスタの設定を GitOps で一元管理できるように <a href="https://cloud.google.com/anthos-config-management/docs/config-sync-overview" target="_blank">Config Sync</a> を構成します。</p>
+<p>Config Sync を利用すると Kubernetes クラスタの設定やポリシーを Git リポジトリで管理できます。 また、Git リポジトリを介さないクラスタへの変更を禁止することができるため、一貫したクラスタの管理が可能になります。</p>
+<p class="image-container"><img alt="Config Sync Overview" src="img/f35d3f6be6655864.svg"></p>
+<h2 is-upgraded>Anthos への登録</h2>
+<p>作成した GKE クラスタを <a href="https://cloud.google.com/anthos/multicluster-management/connect/registering-a-cluster" target="_blank">Anthos へ登録</a>してください。</p>
+<pre>gcloud beta container hub memberships register us \
+  --gke-cluster us-central1/us \
+  --enable-workload-identity
+gcloud beta container hub memberships register europe \
+  --gke-cluster europe-west1/europe \
+  --enable-workload-identity
+gcloud beta container hub memberships register asia \
+  --gke-cluster asia-east1/asia \
+  --enable-workload-identity
+</pre>
+<p>すべてのクラスタが登録されたことを確認してください。</p>
+<pre>gcloud beta container hub memberships list
+</pre>
+<h2 is-upgraded>Git リポジトリの作成</h2>
+<p>このラボでは Git リポジトリに <a href="https://cloud.google.com/source-repositories" target="_blank">Cloud Source Repositories</a> を利用します。</p>
+<p>config リポジトリを作成してください。</p>
+<pre>gcloud source repos create config
+</pre>
+<p>ローカルマシンにリポジトリをクローンしてください。</p>
+<pre>mkdir ~/workshop
+cd ~/workshop
+gcloud source repos clone config
+cd config
+</pre>
+<aside class="special"><p> このラボの作業用のディレクトリとして <code>~/workshop</code> が好ましくない場合は適切なディレクトリで作業してください。</p>
+</aside>
+<p>Config Sync 用に初期化してください。</p>
+<pre>nomos init
+</pre>
+<p>次のようなディレクトリとファイルが作成されます。</p>
+<pre>$ tree
+.
+├── README.md
+├── cluster
+├── clusterregistry
+├── namespaces
+└── system
+    ├── README.md
+    └── repo.yaml
+</pre>
+<aside class="special"><p> 階層リポジトリの詳細は<a href="https://cloud.google.com/anthos-config-management/docs/concepts/hierarchical-repo" target="_blank">ドキュメント</a>を参照してください。</p>
+</aside>
+<p>初期化したファイルをコミットしてプッシュしてください。</p>
+<pre>git checkout -b main
+git add .
+git commit -m &#34;Initial commit&#34;
+git push -u origin main
+</pre>
+<p>Config Sync がこのリポジトリのデータを取得できるように、Config Sync 用のサービスアカウントを作成して権限を付与してください。</p>
+<pre>gcloud iam service-accounts create config-sync
+gcloud projects add-iam-policy-binding \
+  $(gcloud config get-value project) \
+  --member serviceAccount:config-sync@$(gcloud config get-value project).iam.gserviceaccount.com \
+  --role roles/source.reader
+</pre>
+<h2 is-upgraded>Anthos Config Management の有効化</h2>
+<p><a href="https://cloud.google.com/anthos/config-management" target="_blank">Anthos Config Management</a> (ACM) は Anthos の主要サービスのひとつです。 Config Sync は ACM を構成するコンポーネントのひとつです。 このラボでは ACM のうち Config Sync のみを利用します。</p>
+<p>Anthos Config Management を有効化してください。</p>
+<pre>gcloud alpha container hub config-management enable
+</pre>
+<p>Anthos Config Management Operator が作成したサービスアカウントを利用できるように権限を付与してください。</p>
+<pre>gcloud iam service-accounts add-iam-policy-binding \
+  --role roles/iam.workloadIdentityUser \
+  --member &#34;serviceAccount:$(gcloud config get-value project).svc.id.goog[config-management-system/root-reconciler]&#34; \
+  config-sync@$(gcloud config get-value project).iam.gserviceaccount.com
+</pre>
+<aside class="special"><p> Workload Identity では、Kubernetes サービスアカウントが Google サービスアカウントとして機能できるように設定する必要があります。 詳細については<a href="https://cloud.google.com/anthos-config-management/docs/how-to/installing-config-sync#source-repo-wi" target="_blank">ドキュメント</a>を参照してください。</p>
+</aside>
+<h2 is-upgraded>Config Sync の設定</h2>
+<p>各クラスタの作成した Git リポジトリと同期するように Config Sync を設定します。</p>
+<p><code>setup</code> ディレクトリに Config Sync のマニフェストを作成してください。</p>
+<pre>mkdir setup
+cat &lt;&lt;EOF &gt; setup/apply-spec.yaml
+applySpecVersion: 1
+spec:
+  configSync:
+    enabled: true
+    syncRepo: $(gcloud source repos describe config --format &#39;value(url)&#39;)
+    syncBranch: main
+    secretType: gcpserviceaccount
+    gcpServiceAccountEmail: config-sync@$(gcloud config get-value project).iam.gserviceaccount.com
+EOF
+</pre>
+<aside class="special"><p><code>setup</code> ディレクトリは Config Sync で同期されません。</p>
+</aside>
+<p>各クラスタに設定を適用してください。</p>
+<pre>gcloud beta container hub config-management apply \
+  --membership us \
+  --config setup/apply-spec.yaml
+
+gcloud beta container hub config-management apply \
+  --membership europe \
+  --config setup/apply-spec.yaml
+
+gcloud beta container hub config-management apply \
+  --membership asia \
+  --config setup/apply-spec.yaml
+</pre>
+<aside class="special"><p> Config Sync の設定の詳細については<a href="https://cloud.google.com/anthos-config-management/docs/how-to/installing-config-sync#configuring-config-sync" target="_blank">ドキュメント</a>を参照してください。</p>
+</aside>
+<p>各クラスタが正常に同期されているか確認してください。</p>
+<pre>gcloud beta container hub config-management status
+</pre>
+<p><code>Status</code> が <code>SYNCED</code> になっていれば正常に同期されています。</p>
+<p>ここまでの変更をコミットしてください。</p>
+<pre>git add .
+git commit -m &#34;Configure Config Sync&#34;
+</pre>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="マイクロブログのデプロイ" duration="8">
+        <p>このセクションではマイクロブログ アプリケーションをデプロイします。 データベースとなる Cloud Spanner のインスタンスを作成して、Config Sync を利用してすべての GKE クラスタに <code>microblog</code> Deployment を作成します。</p>
+<h2 is-upgraded>アプリケーションについて</h2>
+<p>利用する <a href="https://github.com/ShawnLabo/microblog" target="_blank">microblog</a> はテスト用のサンプル アプリケーションです。 マイクロブログとしてのシンプルな HTTP の API を提供します。</p>
+<h3 is-upgraded>マイクロブログ メッセージの取得</h3>
+<p><code>GET /api/messages</code> ですべてのメッセージを取得できます。</p>
+<pre>$ curl http://$MICROBLOG_HOST/api/messages | jq
+{
+  &#34;server_zone&#34;: &#34;asia-east1-b&#34;,
+  &#34;messages&#34;: [
+    {
+      &#34;id&#34;: &#34;93efac34-9356-4af6-9223-375c0bd6c672&#34;,
+      &#34;created_at&#34;: &#34;2021-08-13T00:40:18.246548854Z&#34;,
+      &#34;name&#34;: &#34;Shawn&#34;,
+      &#34;body&#34;: &#34;client-asia-northeast1-c&#34;,
+      &#34;written_at&#34;: &#34;asia-east1-b&#34;
+    },
+    {
+      &#34;id&#34;: &#34;f227ca14-73df-4fcb-8b3f-7587d27b3bf9&#34;,
+      &#34;created_at&#34;: &#34;2021-08-13T00:36:28.360528217Z&#34;,
+      &#34;name&#34;: &#34;Shawn&#34;,
+      &#34;body&#34;: &#34;client-europe-west6-c&#34;,
+      &#34;written_at&#34;: &#34;europe-west1-c&#34;
+    },
+    {
+      &#34;id&#34;: &#34;241482c9-1638-4366-bc99-be9c96926ad9&#34;,
+      &#34;created_at&#34;: &#34;2021-08-13T00:33:38.181572564Z&#34;,
+      &#34;name&#34;: &#34;Shawn&#34;,
+      &#34;body&#34;: &#34;client-us-east1-c&#34;,
+      &#34;written_at&#34;: &#34;us-central1-f&#34;
+    }
+  ]
+}
+</pre>
+<p><code>server_zone</code> プロパティはこのリクエストを処理した Pod が起動している Kubernetes ノード (Compute Engine のインスタンス) のゾーンです。 <code>server_zone</code> プロパティを見ることでどのゾーンでリクエストが処理されたかを確認できます。</p>
+<p>各メッセージの <code>written_at</code> プロパティはそのメッセージの書き込みを処理した Pod のゾーンです。</p>
+<h3 is-upgraded>マイクロブログ メッセージの書き込み</h3>
+<p><code>POST /api/messages</code> で新しいメッセージを投稿できます。</p>
+<pre>$ curl -X POST $ADDRESS/api/messages -d &#39;{&#34;name&#34;:&#34;Shawn&#34;,&#34;body&#34;:&#34;hello&#34;}&#39; | jq
+{
+  &#34;server_zone&#34;: &#34;asia-east1-b&#34;,
+  &#34;message&#34;: {
+    &#34;id&#34;: &#34;5543da95-e3ab-4ac9-a025-ca7925e0baa3&#34;,
+    &#34;created_at&#34;: &#34;2021-08-13T04:27:12.539542304Z&#34;,
+    &#34;name&#34;: &#34;Shawn&#34;,
+    &#34;body&#34;: &#34;hello&#34;,
+    &#34;written_at&#34;: &#34;asia-east1-b&#34;
+  }
+}
+</pre>
+<p>レスポンスには <code>message</code> プロパティに書き込まれたメッセージと、<code>server_zone</code> プロパティにリクエストを処理したゾーンが含まれています。 書き込みリクエストの<code>server_zone</code>と<code>message.written_at</code>は必ず一致します。</p>
+<h2 is-upgraded>Cloud Spanner の準備</h2>
+<p>Cloud Spanner のインスタンスを作成してください。</p>
+<pre>gcloud spanner instances create microblog \
+  --config nam-eur-asia1 \
+  --description microblog \
+  --nodes 1
+</pre>
+<aside class="special"><p><code>nam-eur-asia1</code>は北米、ヨーロッパ、アジアの3つの大陸間でデータが複製されます。 詳細は<a href="https://cloud.google.com/spanner/docs/instance-configurations" target="_blank">ドキュメント</a>を参照してください。</p>
+</aside>
+<p>作成したインスタンスにアプリケーションで利用するデータベースとテーブルを作成してください。</p>
+<pre>gcloud spanner databases create microblog \
+  --instance microblog \
+  --ddl &#39;CREATE TABLE Messages (
+  MessageId     STRING(36)  NOT NULL,
+  CreatedAt     TIMESTAMP   NOT NULL,
+  Name          STRING(MAX) NOT NULL,
+  Body          STRING(MAX) NOT NULL,
+  WrittenAt     STRING(MAX) NOT NULL,
+) PRIMARY KEY (MessageId, CreatedAt DESC)&#39;
+</pre>
+<p>このインスタンスにアクセスするためのサービスアカウントを作成して権限を付与してください。</p>
+<pre>gcloud iam service-accounts create microblog
+gcloud spanner instances add-iam-policy-binding microblog \
+  --member serviceAccount:microblog@$(gcloud config get-value project).iam.gserviceaccount.com \
+  --role roles/spanner.databaseUser
+</pre>
+<h2 is-upgraded>アプリケーションのデプロイ</h2>
+<p>アプリケーションはすべての GKE クラスタに Deployment としてデプロイします。 必要なマニフェストの YAML ファイルを作成して Git リポジトリにプッシュすることで、Config Sync によりすべてのクラスタに Deployment が同期されます。</p>
+<p>デプロイ先の Namespace のマニフェストを作成してください。</p>
+<pre>mkdir namespaces/microblog
+cat &lt;&lt;EOF &gt; namespaces/microblog/namespace.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: microblog
+EOF
+</pre>
+<p>アプリケーションの Pod で利用する Kubernetes サービスアカウントのマニフェストを作成してください。</p>
+<pre>cat &lt;&lt; EOF &gt; namespaces/microblog/service-account.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  namespace: microblog
+  name: microblog
+  annotations:
+    iam.gke.io/gcp-service-account: microblog@$(gcloud config get-value project).iam.gserviceaccount.com
+EOF
+</pre>
+<aside class="special"><p><code>annotations</code> で<a href="https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity" target="_blank">Workload Identity</a> で利用する Google サービスアカウントを指定しています。</p>
+</aside>
+<p>アプリケーションの Deployment のマニフェストを作成してください。</p>
+<pre>cat &lt;&lt;EOF &gt; namespaces/microblog/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: microblog
+  name: microblog
+  labels:
+    app: microblog
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: microblog
+  template:
+    metadata:
+      labels:
+        app: microblog
+    spec:
+      containers:
+        - name: microblog
+          image: ghcr.io/shawnlabo/microblog:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+          env:
+            - name: DATABASE
+              value: projects/$(gcloud config get-value project)/instances/microblog/databases/microblog
+          livenessProbe:
+            httpGet:
+              path: /liveness
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /readiness
+              port: 8080
+            initialDelaySeconds: 3
+            periodSeconds: 3
+      serviceAccountName: microblog
+EOF
+</pre>
+<p>変更をコミットしてプッシュしてください。</p>
+<pre><code language="language-bash" class="language-bash">git add .
+git commit -m &#34;Add microblog&#34;
+git push
+</code></pre>
+<p>変更が正常に同期されているか確認してください。</p>
+<pre>gcloud beta container hub config-management status
+</pre>
+<p><a href="https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity" target="_blank">Workload Identity</a> により <code>microblog</code> Kubernetes サービスアカウントが <code>microblog</code> Google サービスアカウントの機能を利用できるように権限を付与してください。</p>
+<pre>gcloud iam service-accounts add-iam-policy-binding \
+  microblog@$(gcloud config get-value project).iam.gserviceaccount.com \
+  --role roles/iam.workloadIdentityUser \
+  --member &#34;serviceAccount:$(gcloud config get-value project).svc.id.goog[microblog/microblog]&#34;
+</pre>
+<p>すべてのクラスタに Deployment が作成されていることを確認してください。</p>
+<pre>kubectl config use-context mb-us
+kubectl get deployment -n microblog
+
+kubectl config use-context mb-europe
+kubectl get deployment -n microblog
+
+kubectl config use-context mb-asia
+kubectl get deployment -n microblog
+</pre>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="Multi Cluster Ingress の構成" duration="8">
+        <p>このセクションでは <a href="https://cloud.google.com/kubernetes-engine/docs/concepts/multi-cluster-ingress" target="_blank">Multi Cluster Ingress</a> により、複数のクラスタにまたがるロードバランサを作成します。 これにより、単一の IP アドレスへのリクエストを最も近いリージョンの GKE クラスタで処理できます。</p>
+<p class="image-container"><img alt="MCI Traffic" src="img/2c7019b19a890d48.svg"></p>
+<h2 is-upgraded>構成クラスタ の設定</h2>
+<p>Multi Cluster Ingress では、<strong>MultiClusterService</strong> リソースと <strong>MultiClusterIngress</strong> リソースによってロードバランサを構成します。 これらは複数クラスタにまたがるネットワークやロードバランサを構成するためのリソースですが、リソース自体はひとつのクラスタのみにデプロイします。 これにより、複数クラスタに関わるリソースを一元的に管理できます。 また、これらのリソースを一元的に管理するクラスタを<strong>構成クラスタ (Config Cluster)</strong>と呼びます。</p>
+<p class="image-container"><img alt="Config Cluster" src="img/7440dfdaeb496daf.png"></p>
+<aside class="special"><p> より正確なアーキテクチャを知るには<a href="https://cloud.google.com/kubernetes-engine/docs/concepts/multi-cluster-ingress" target="_blank">ドキュメント</a>を参照してください。</p>
+</aside>
+<p>構成クラスタの役割は分散先のクラスタが担うことも可能です。 このラボでは <code>us-central1</code> リージョンに作成した <code>us</code> クラスタを構成クラスタとします。</p>
+<h2 is-upgraded>ClusterSelector の作成</h2>
+<p>MultiClusterService と MultiClusterIngress を作成する前に、これらのリソースが構成クラスタのみに同期されるように <a href="https://cloud.google.com/kubernetes-engine/docs/add-on/config-sync/how-to/clusterselectors" target="_blank">ClusterSelector</a> を作成します。 ClusterSelector を使うことで、マニフェストを特定のクラスタのみに適用することが可能になります。</p>
+<p><code>us</code> クラスタに <code>config: true</code> というラベルを設定するための Cluster マニフェストを作成してください。</p>
+<pre>cat &lt;&lt; EOF &gt; clusterregistry/us.yaml
+apiVersion: clusterregistry.k8s.io/v1alpha1
+kind: Cluster
+metadata:
+  name: us
+  labels:
+    config: &#34;true&#34;
+EOF
+</pre>
+<p><code>config: true</code> というラベルを持つクラスタを選択するための ClusterSelector マニフェストを作成してください。</p>
+<pre>cat &lt;&lt; EOF &gt; clusterregistry/config-cluster-selector.yaml
+apiVersion: configmanagement.gke.io/v1
+kind: ClusterSelector
+metadata:
+  name: config-cluster-selector
+spec:
+  selector:
+    matchLabels:
+      config: &#34;true&#34;
+EOF
+</pre>
+<p>変更をコミットしてプッシュしてください。</p>
+<pre>git add .
+git commit -m &#34;Add ClusterSelector for Config Cluster&#34;
+git push
+</pre>
+<h2 is-upgraded>Multi Cluster Ingress の作成</h2>
+<p>マイクロブログ アプリケーションを公開するための MultiClusterService と MultiClusterIngress を作成します。</p>
+<p>Multi Cluster Ingress の機能を有効化してください。</p>
+<pre>gcloud beta container hub ingress enable \
+  --config-membership=projects/$(gcloud config get-value project)/locations/global/memberships/us
+</pre>
+<p>ロードバランサで利用する IP アドレスを作成してください。</p>
+<pre>gcloud compute addresses create microblog --global
+</pre>
+<p>MultiClusterService を作成してください。</p>
+<pre><code language="language-bash" class="language-bash">cat &lt;&lt; EOF &gt; namespaces/microblog/multi-cluster-service.yaml
+apiVersion: networking.gke.io/v1
+kind: MultiClusterService
+metadata:
+  namespace: microblog
+  name: microblog
+  annotations:
+    configmanagement.gke.io/cluster-selector: config-cluster-selector
+spec:
+  template:
+    spec:
+      selector:
+        app: microblog
+      ports:
+      - name: web
+        protocol: TCP
+        port: 8080
+        targetPort: 8080
+EOF
+</code></pre>
+<p>MultiClusterIngress を作成してください。</p>
+<pre><code language="language-bash" class="language-bash">cat &lt;&lt; EOF &gt; namespaces/microblog/multi-cluster-ingress.yaml
+apiVersion: networking.gke.io/v1
+kind: MultiClusterIngress
+metadata:
+  namespace: microblog
+  name: microblog
+  annotations:
+    configmanagement.gke.io/cluster-selector: config-cluster-selector
+    networking.gke.io/static-ip: $(gcloud compute addresses describe microblog --global --format &#39;value(address)&#39;)
+spec:
+  template:
+    spec:
+      backend:
+        serviceName: microblog
+        servicePort: 8080
+EOF
+</code></pre>
+<aside class="special"><p> MultiClusterService と MultiClusterIngress の詳細については<a href="https://cloud.google.com/kubernetes-engine/docs/how-to/multi-cluster-ingress" target="_blank">ドキュメント</a>を参照してください。</p>
+</aside>
+<p>変更をコミットしてプッシュしてください。</p>
+<pre><code language="language-bash" class="language-bash">git add .
+git commit -m &#34;Expose microblog with Multi Cluster Ingress&#34;
+git push
+</code></pre>
+<p>MultiClusterIngress が作成されたことを確認してください。</p>
+<pre><code language="language-bash" class="language-bash">kubectl config use-context mci-us
+kubectl describe mci microblog -n microblog
+</code></pre>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="検証" duration="0">
+        <p>このセクションでは構築したアプリケーションが正常に動作していることを確認します。</p>
+<p>まず、ローカルマシンからマイクロブログが利用できることを確認します。 次に、各地域に <a href="https://cloud.google.com/compute" target="_blank">Compute Engine</a> のインスタンスを作成して、最も地理的に近い GKE クラスタで処理が行われていることを確認します。</p>
+<h2 is-upgraded>ローカルでの確認</h2>
+<p>作業に利用しているマシンからマイクロブログ API を利用します。</p>
+<p>IP アドレスを環境変数に格納してください。</p>
+<pre>ADDRESS=$(gcloud compute addresses describe microblog --global --format &#39;value(address)&#39;)
+</pre>
+<p>新しいメッセージを投稿してください。 名前やメッセージ本文は自由に変更してください。</p>
+<pre>curl -is -X POST $ADDRESS/api/messages \
+  -d &#34;{\&#34;name\&#34;:\&#34;Your name\&#34;,\&#34;body\&#34;:\&#34;Your first message\&#34;}&#34;
+</pre>
+<aside class="special"><p> エラーになる場合は<a href="https://console.cloud.google.com/net-services/loadbalancing/loadBalancers/list" target="_blank">コンソール</a>でロードバランサの作成が完了しているかどうか確認してください</p>
+</aside>
+<p>すべてのメッセージを取得してください。</p>
+<pre>curl -is $ADDRESS/api/messages
+</pre>
+<p>投稿したメッセージが取得できることを確認してください。</p>
+<h2 is-upgraded>us-central1 から確認</h2>
+<p>us-central1 に Compute Engine のインスタンスを作成して、そのインスタンスからメッセージを投稿します。</p>
+<p>インスタンスを作成してください。</p>
+<pre>gcloud compute instances create client-us-central1-c --zone us-central1-c
+</pre>
+<p>メッセージを投稿してください。メッセージ本文にゾーンを含めると確認しやすくなります。</p>
+<pre>gcloud compute ssh client-us-central1-c \
+  --zone us-central1-c \
+  --command &#34;curl -is -X POST $ADDRESS/api/messages -X POST -d &#39;{\&#34;name\&#34;:\&#34;Your name\&#34;,\&#34;body\&#34;:\&#34;Your message from client-us-central1-c\&#34;}&#39;&#34;
+</pre>
+<p>すべてのメッセージを取得してください。</p>
+<pre>gcloud compute ssh client-us-central1-c \
+  --zone us-central1-c \
+  --command &#34;curl -is $ADDRESS/api/messages&#34;
+</pre>
+<p>投稿したメッセージが取得できることを確認してください。 また、<code>server_zone</code> プロパティや各メッセージの <code>written_at</code> を確認してください。</p>
+<aside class="special"><p> 次のコマンドを実行するとパスフレーズの入力を省略できます。</p>
+<p><code>eval $(ssh-agent); ssh-add ~/.ssh/google_compute_engine</code></p>
+</aside>
+<h2 is-upgraded>様々な地域からの確認</h2>
+<p>様々な地域からリクエストを送って、最も近いクラスタで処理されることを確認します。</p>
+<p>簡単にインスタンスの作成とメッセージの投稿・取得ができるようにスクリプトを作成してください。</p>
+<pre>cat &lt;&lt; &#39;EOF&#39; &gt; test.sh
+#!/bin/bash -x
+
+address=$(gcloud compute addresses describe microblog --global --format &#39;value(address)&#39;)
+zone=$1
+instance=client-$zone
+
+if ! gcloud compute instances describe $instance --zone $zone &gt; /dev/null 2&gt;&amp;1; then
+  : Instance $instance does not exist. Creating...
+
+  gcloud compute instances create $instance --zone $zone
+
+  sleep 10
+fi
+
+:
+: ================
+: Post message from $zone
+gcloud compute ssh $instance --zone $zone --command &#34;curl -is -X POST $address/api/messages -d &#39;{\&#34;name\&#34;:\&#34;$USER\&#34;,\&#34;body\&#34;:\&#34;message from $instance\&#34;}&#39;&#34;
+
+:
+: ================
+: Get messages from $zone
+gcloud compute ssh $instance --zone $zone --command &#34;curl -is $address/api/messages&#34;
+EOF
+chmod +x test.sh
+</pre>
+<p>スクリプトを使って、以下のゾーンのインスタンスを作成してメッセージを投稿・確認してください。</p>
+<pre>./test.sh us-east1-c        # サウスカロライナ
+./test.sh europe-west6-c    # チューリッヒ
+./test.sh asia-northeast1-c # 東京
+</pre>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="おわりに" duration="0">
+        <p>以上でこのラボは終了です。おつかれさまでした。</p>
+<p>作成したリソースのクリーンアップを忘れないようにしてください。 ラボ用のプロジェクトを作成した場合は、プロジェクトごと削除してください。</p>
+
+
+      </google-codelab-step>
+    
+  </google-codelab>
+
+  <script src="https://storage.googleapis.com/codelab-elements/native-shim.js"></script>
+  <script src="https://storage.googleapis.com/codelab-elements/custom-elements.min.js"></script>
+  <script src="https://storage.googleapis.com/codelab-elements/prettify.js"></script>
+  <script src="https://storage.googleapis.com/codelab-elements/codelab-elements.js"></script>
+  <script src="//support.google.com/inapp/api.js"></script>
+
+</body>
+</html>
