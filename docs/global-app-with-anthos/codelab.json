@@ -3,7 +3,7 @@
   "format": "html",
   "prefix": "https://storage.googleapis.com",
   "mainga": "UA-49880327-14",
-  "updated": "2021-08-13T16:23:50+09:00",
+  "updated": "2021-08-13T16:50:19+09:00",
   "id": "global-app-with-anthos",
   "duration": 60,
   "title": "Global App with Anthos",
@@ -25,6 +25,6 @@
     "spanner"
   ],
   "feedback": "https://github.com/ShawnLabo/google-cloud-tutorials/issues",
-  "ga": "G-EFLGFLQ7TH",
+  "ga": "UA-191798031-4",
   "url": "global-app-with-anthos"
 }
