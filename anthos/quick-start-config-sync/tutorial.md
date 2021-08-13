@@ -5,7 +5,7 @@ summary: はじめての Config Sync
 author: nownabe
 categories: Cloud,Anthos
 tags: cloud,anthos,acm,anthos-config-management,config-sync,kubernetes
-analytics account: 
+analytics account: UA-191798031-4
 feedback link: https://github.com/ShawnLabo/google-cloud-tutorials/issues
 
 ---

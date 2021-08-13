@@ -5,7 +5,7 @@ summary: Build a global scale application with Spanner and Multi Cluster Ingress
 author: nownabe
 categories: Cloud,Anthos
 tags: cloud,anthos,kubernetes,spanner,gke
-analytics account: G-EFLGFLQ7TH
+analytics account: UA-191798031-4
 feedback link: https://github.com/ShawnLabo/google-cloud-tutorials/issues
 
 ---
