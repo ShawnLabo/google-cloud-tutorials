@@ -39,12 +39,21 @@
 <li>ラボで作成したリソースをクリーンアップしやすいように新規プロジェクトの利用をおすすめします</li>
 </ul>
 </li>
-<li><a href="https://cloud.google.com/sdk" target="_blank">Cloud SDK</a> (<code>gcloud</code> コマンド)  <ul>
-<li><a href="https://cloud.google.com/shell" target="_blank">Cloud Shell</a> を利用する場合はすでにインストール済みです</li>
-<li>Cloud Shell 以外の環境で作業する場合はインストールされていることを確認してください</li>
+<li><a href="https://cloud.google.com/shell" target="_blank">Cloud Shell</a>  <ul>
+<li>このラボでは Cloud Shell での操作を前提にしています</li>
+<li>Cloud Shell 以外で操作する場合は下記の指示に従ってください。</li>
 </ul>
 </li>
 </ul>
+<h2 is-upgraded>Cloud Shell 以外での操作</h2>
+<p>Cloud Shell 以外で操作する場合は次のツールがインストールしてください。</p>
+<ul>
+<li><a href="https://cloud.google.com/sdk" target="_blank">Cloud SDK</a> (<code>gcloud</code> コマンド)</li>
+<li><a href="https://stedolan.github.io/jq/" target="_blank">jq</a></li>
+</ul>
+<p>また、ラボで使用する Cloud SDK コンポーネントをインストールしてください。</p>
+<pre>gcloud components install alpha beta kubectl nomos
+</pre>
 
 
       </google-codelab-step>
@@ -94,12 +103,6 @@
   multiclusteringress.googleapis.com \
   sourcerepo.googleapis.com \
   spanner.googleapis.com
-</pre>
-<h2 is-upgraded>Cloud SDK コンポーネントのインストール</h2>
-<aside class="special"><p> Cloud Shell を利用する場合は必要ありません。</p>
-</aside>
-<p>このラボで使用する Cloud SDK のコンポーネントをインストールしてください。</p>
-<pre>gcloud components install alpha beta kubectl nomos
 </pre>
 
 
@@ -539,11 +542,11 @@ kubectl describe mci microblog -n microblog
 
       </google-codelab-step>
     
-      <google-codelab-step label="検証" duration="0">
+      <google-codelab-step label="検証" duration="12">
         <p>このセクションでは構築したアプリケーションが正常に動作していることを確認します。</p>
-<p>まず、ローカルマシンからマイクロブログが利用できることを確認します。 次に、各地域に <a href="https://cloud.google.com/compute" target="_blank">Compute Engine</a> のインスタンスを作成して、最も地理的に近い GKE クラスタで処理が行われていることを確認します。</p>
-<h2 is-upgraded>ローカルでの確認</h2>
-<p>作業に利用しているマシンからマイクロブログ API を利用します。</p>
+<p>まず、Cloud Shell からマイクロブログが利用できることを確認します。 次に、各地域に <a href="https://cloud.google.com/compute" target="_blank">Compute Engine</a> のインスタンスを作成して、最も地理的に近い GKE クラスタで処理が行われていることを確認します。</p>
+<h2 is-upgraded>Cloud Shell からの確認</h2>
+<p>Cloud Shell または作業に利用しているマシンからマイクロブログ API を利用します。</p>
 <p>IP アドレスを環境変数に格納してください。</p>
 <pre>ADDRESS=$(gcloud compute addresses describe microblog --global --format &#39;value(address)&#39;)
 </pre>
@@ -565,12 +568,12 @@ kubectl describe mci microblog -n microblog
 <p>メッセージを投稿してください。メッセージ本文にゾーンを含めると確認しやすくなります。</p>
 <pre>gcloud compute ssh client-us-central1-c \
   --zone us-central1-c \
-  --command &#34;curl -is -X POST $ADDRESS/api/messages -X POST -d &#39;{\&#34;name\&#34;:\&#34;Your name\&#34;,\&#34;body\&#34;:\&#34;Your message from client-us-central1-c\&#34;}&#39;&#34;
+  --command &#34;curl -s -X POST $ADDRESS/api/messages -X POST -d &#39;{\&#34;name\&#34;:\&#34;Your name\&#34;,\&#34;body\&#34;:\&#34;Your message from client-us-central1-c\&#34;}&#39;&#34; | jq
 </pre>
 <p>すべてのメッセージを取得してください。</p>
 <pre>gcloud compute ssh client-us-central1-c \
   --zone us-central1-c \
-  --command &#34;curl -is $ADDRESS/api/messages&#34;
+  --command &#34;curl -s $ADDRESS/api/messages&#34; | jq
 </pre>
 <p>投稿したメッセージが取得できることを確認してください。 また、<code>server_zone</code> プロパティや各メッセージの <code>written_at</code> を確認してください。</p>
 <aside class="special"><p> 次のコマンドを実行するとパスフレーズの入力を省略できます。</p>
@@ -587,7 +590,9 @@ zone=$1
 instance=client-$zone
 
 if ! gcloud compute instances describe $instance --zone $zone &gt; /dev/null 2&gt;&amp;1; then
+  :
   : Instance $instance does not exist. Creating...
+  :
 
   gcloud compute instances create $instance --zone $zone
 
@@ -597,12 +602,13 @@ fi
 :
 : ================
 : Post message from $zone
-gcloud compute ssh $instance --zone $zone --command &#34;curl -is -X POST $address/api/messages -d &#39;{\&#34;name\&#34;:\&#34;$USER\&#34;,\&#34;body\&#34;:\&#34;message from $instance\&#34;}&#39;&#34;
+gcloud compute ssh $instance --zone $zone --command &#34;curl -s -X POST $address/api/messages -d &#39;{\&#34;name\&#34;:\&#34;$USER\&#34;,\&#34;body\&#34;:\&#34;message from $instance\&#34;}&#39;&#34; | jq
 
+:
 :
 : ================
 : Get messages from $zone
-gcloud compute ssh $instance --zone $zone --command &#34;curl -is $address/api/messages&#34;
+gcloud compute ssh $instance --zone $zone --command &#34;curl -s $address/api/messages&#34; | jq
 EOF
 chmod +x test.sh
 </pre>
@@ -615,7 +621,7 @@ chmod +x test.sh
 
       </google-codelab-step>
     
-      <google-codelab-step label="おわりに" duration="0">
+      <google-codelab-step label="おわりに" duration="1">
         <p>以上でこのラボは終了です。おつかれさまでした。</p>
 <p>作成したリソースのクリーンアップを忘れないようにしてください。 ラボ用のプロジェクトを作成した場合は、プロジェクトごと削除してください。</p>
 
