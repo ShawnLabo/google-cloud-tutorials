@@ -65,13 +65,8 @@
 <p>このアプリケーションのアーキテクチャは以下の特徴があります。</p>
 <ul>
 <li>スケーラブル  <ul>
-<li>コンテナ化されていて <a href="https://cloud.google.com/kubernetes-engine" target="_blank">Google Kubernetes Engine</a> 上で実行されている</li>
-<li>データベースに <a href="https://cloud.google.com/spanner" target="_blank">Cloud Spanner</a> を利用している</li>
-</ul>
-</li>
-<li>低レイテンシ  <ul>
-<li>GKE クラスタがアメリカ、ヨーロッパ、アジアに分散されていて、地理的に近いクラスタで処理できる</li>
-<li>Spanner のノードが各クラスタと同じリージョンにあり、高速にデータの読み取りができる</li>
+<li>コンテナ化されていて基盤の <a href="https://cloud.google.com/kubernetes-engine" target="_blank">Google Kubernetes Engine</a> によるオートスケーリングが可能</li>
+<li>データベースに <a href="https://cloud.google.com/spanner" target="_blank">Cloud Spanner</a> を利用することで水平スケールが可能</li>
 </ul>
 </li>
 <li>単一 IP アドレス  <ul>
@@ -79,12 +74,18 @@
 <li>複数クラスタにまたがって分散するロードバランサを作成するために <a href="https://cloud.google.com/kubernetes-engine/docs/concepts/multi-cluster-ingress" target="_blank">Multi Cluster Ingress</a> を利用している</li>
 </ul>
 </li>
-<li>GitOps  <ul>
-<li>複数クラスタの管理を一元化するために GitOps を利用している</li>
-<li>GitOps を利用するために <a href="https://cloud.google.com/anthos-config-management/docs/config-sync-overview" target="_blank">Config Sync</a> を利用している</li>
+<li>高可用性  <ul>
+<li>Kubernetes クラスタ単位の障害があっても、Multi Cluster Ingress のクラスタをまたがる負荷分散によって別クラスタで処理を継続</li>
+<li>リージョン単位の障害があっても、Cloud Spanner のマルチリージョン構成や Multi Cluster Ingress によって継続稼働</li>
+</ul>
+</li>
+<li>低レイテンシ  <ul>
+<li>GKE クラスタがアメリカ、ヨーロッパ、アジアに分散されていて、地理的に近いクラスタで処理できる</li>
+<li>Spanner のノードが各クラスタと同じリージョンにあり、高速にデータの読み取りができる</li>
 </ul>
 </li>
 </ul>
+<p>また、複数クラスタの管理を一元化するために <a href="https://cloud.google.com/anthos-config-management/docs/config-sync-overview" target="_blank">Config Sync</a> を利用しています。</p>
 
 
       </google-codelab-step>

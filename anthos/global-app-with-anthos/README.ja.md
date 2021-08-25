@@ -58,17 +58,19 @@ Duration: 3
 このアプリケーションのアーキテクチャは以下の特徴があります。
 
 * スケーラブル
-  * コンテナ化されていて [Google Kubernetes Engine](https://cloud.google.com/kubernetes-engine) 上で実行されている
-  * データベースに [Cloud Spanner](https://cloud.google.com/spanner) を利用している
-* 低レイテンシ
-  * GKE クラスタがアメリカ、ヨーロッパ、アジアに分散されていて、地理的に近いクラスタで処理できる
-  * Spanner のノードが各クラスタと同じリージョンにあり、高速にデータの読み取りができる
+  * コンテナ化されていて基盤の [Google Kubernetes Engine](https://cloud.google.com/kubernetes-engine) によるオートスケーリングが可能
+  * データベースに [Cloud Spanner](https://cloud.google.com/spanner) を利用することで水平スケールが可能
 * 単一 IP アドレス
   * 単一のエニーキャスト IP でのグローバルな負荷分散を実現するために [Cloud Load Balancing](https://cloud.google.com/load-balancing) を利用している
   * 複数クラスタにまたがって分散するロードバランサを作成するために [Multi Cluster Ingress](https://cloud.google.com/kubernetes-engine/docs/concepts/multi-cluster-ingress) を利用している
-* GitOps
-  * 複数クラスタの管理を一元化するために GitOps を利用している
-  * GitOps を利用するために [Config Sync](https://cloud.google.com/anthos-config-management/docs/config-sync-overview) を利用している
+* 高可用性
+  * Kubernetes クラスタ単位の障害があっても、Multi Cluster Ingress のクラスタをまたがる負荷分散によって別クラスタで処理を継続
+  * リージョン単位の障害があっても、Cloud Spanner のマルチリージョン構成や Multi Cluster Ingress によって継続稼働
+* 低レイテンシ
+  * GKE クラスタがアメリカ、ヨーロッパ、アジアに分散されていて、地理的に近いクラスタで処理できる
+  * Spanner のノードが各クラスタと同じリージョンにあり、高速にデータの読み取りができる
+
+また、複数クラスタの管理を一元化するために [Config Sync](https://cloud.google.com/anthos-config-management/docs/config-sync-overview) を利用しています。
 
 ## 準備
 
