@@ -727,7 +727,7 @@ git push
 MultiClusterIngress が作成されたことを確認してください。
 
 ```bash
-kubectl config use-context mci-us
+kubectl config use-context mb-us
 kubectl describe mci microblog -n microblog
 ```
 
