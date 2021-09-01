@@ -207,7 +207,9 @@ cd config
 ```
 
 > aside positive
-> このラボの作業用のディレクトリとして `~/workshop` が好ましくない場合は適切なディレクトリで作業してください。
+> このあとの作業はこちらのディレクトリで作業します。
+> もし、ディレクトリを移動した場合は `cd ~/workshop/config` でこちらのディレクトリに戻って作業してください。
+> また、このラボの作業用のディレクトリとして `~/workshop` が好ましくない場合は適切なディレクトリで作業してください。
 
 Config Sync 用に初期化してください。
 
@@ -236,6 +238,8 @@ $ tree
 
 ```console
 git checkout -b main
+git config user.name $USER
+git config user.email $(gcloud config get-value account)
 git add .
 git commit -m "Initial commit"
 git push -u origin main

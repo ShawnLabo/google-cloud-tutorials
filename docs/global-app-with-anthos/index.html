@@ -182,7 +182,7 @@ cd ~/workshop
 gcloud source repos clone config
 cd config
 </pre>
-<aside class="special"><p> このラボの作業用のディレクトリとして <code>~/workshop</code> が好ましくない場合は適切なディレクトリで作業してください。</p>
+<aside class="special"><p> このあとの作業はこちらのディレクトリで作業します。 もし、ディレクトリを移動した場合は <code>cd ~/workshop/config</code> でこちらのディレクトリに戻って作業してください。 また、このラボの作業用のディレクトリとして <code>~/workshop</code> が好ましくない場合は適切なディレクトリで作業してください。</p>
 </aside>
 <p>Config Sync 用に初期化してください。</p>
 <pre>nomos init
@@ -202,6 +202,8 @@ cd config
 </aside>
 <p>初期化したファイルをコミットしてプッシュしてください。</p>
 <pre>git checkout -b main
+git config user.name $USER
+git config user.email $(gcloud config get-value account)
 git add .
 git commit -m &#34;Initial commit&#34;
 git push -u origin main
