@@ -1,0 +1,27 @@
+{
+  "environment": "web",
+  "format": "html",
+  "prefix": "https://storage.googleapis.com",
+  "mainga": "UA-49880327-14",
+  "updated": "2021-08-10T16:10:50+09:00",
+  "id": "anthos-cicd-with-gitlab",
+  "duration": 0,
+  "title": "Modern CI/CD with Anthos",
+  "summary": "Modern CI/CD with Anthos",
+  "source": "README.md",
+  "theme": "",
+  "status": [
+    "[draft]"
+  ],
+  "category": [
+    "cloud",
+    "anthos"
+  ],
+  "tags": [
+    "anthos",
+    "cloud"
+  ],
+  "feedback": "https://github.com/ShawnLabo/google-cloud-tutorials/issues",
+  "ga": "G-EFLGFLQ7TH",
+  "url": "anthos-cicd-with-gitlab"
+}

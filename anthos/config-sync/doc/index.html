@@ -1,0 +1,164 @@
+<!--
+ Copyright 2021 Google LLC
+
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+-->
+
+
+<!doctype html>
+
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, minimum-scale=1.0, initial-scale=1.0, user-scalable=yes">
+  <meta name="theme-color" content="#4F7DC9">
+  <meta charset="UTF-8">
+  <title>Getting Started with Config Sync</title>
+  <link rel="stylesheet" href="//fonts.googleapis.com/css?family=Source+Code+Pro:400|Roboto:400,300,400italic,500,700|Roboto+Mono">
+  <link rel="stylesheet" href="//fonts.googleapis.com/icon?family=Material+Icons">
+  <link rel="stylesheet" href="https://storage.googleapis.com/codelab-elements/codelab-elements.css">
+  <style>
+    .success {
+      color: #1e8e3e;
+    }
+    .error {
+      color: red;
+    }
+  </style>
+</head>
+<body>
+  <google-codelab-analytics gaid="UA-49880327-14"></google-codelab-analytics>
+  <google-codelab codelab-gaid=""
+                  id="doc"
+                  title="Getting Started with Config Sync"
+                  environment="web"
+                  feedback-link="">
+    
+      <google-codelab-step label="はじめに" duration="5">
+        <aside class="warning"><p> このラボは非公式であり、Google Cloud の公式のチュートリアルではありません。</p>
+</aside>
+<h2 is-upgraded>前提条件</h2>
+<ul>
+<li>Google Cloud アカウント</li>
+<li>有効な Billing Account と紐付いている Google Cloud プロジェクト  <ul>
+<li>クリーンアップしやすいようにこのラボ用の新規プロジェクトの利用をおすすめします</li>
+</ul>
+</li>
+<li>有効な Billing Account と紐付いている Google Cloud プロジェクト</li>
+<li><a href="https://cloud.google.com/sdk" target="_blank">Cloud SDK</a> (gcloud)</li>
+</ul>
+<h2 is-upgraded>Cloud SDK コンポーネントのインストール</h2>
+<aside class="special"><p> Cloud Shell の場合は必要ありません。</p>
+</aside>
+<p>必要な gcloud コンポーネントをインストールしてください。</p>
+<pre>gcloud components install kubectl alpha nomos
+</pre>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="このラボについて" duration="1">
+        <p>このラボでは <a href="https://cloud.google.com/kubernetes-engine/docs/add-on/config-sync/config-sync-overview" target="_blank">Config Sync</a> について学びます。</p>
+<p>Config Sync は <a href="https://cloud.google.com/anthos/config-management" target="_blank">Anthos Config Management</a> のコンポーネントのひとつであり、GitOps の機能を Kubernetes に提供します。</p>
+<p>このラボでは Config Sync を使って Source Repository にある Kubernetes のマニフェストを GKE クラスタに自動で適用します。</p>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="準備" duration="3">
+        <h2 is-upgraded>プロジェクトの設定</h2>
+<p>使用するプロジェクトを設定してください。</p>
+<pre>gcloud config set project YOUR-PROJECT
+</pre>
+<h2 is-upgraded>API の有効化</h2>
+<p>利用するサービスの API を有効化します。</p>
+<pre>gcloud services enable \
+  anthos.googleapis.com \
+  container.googleapis.com \
+  sourcerepo.googleapis.com
+</pre>
+<h2 is-upgraded>Anthos Config Management の有効化</h2>
+<p>Anthos Config Management を有効化します。</p>
+<pre>gcloud alpha container hub config-management enable
+</pre>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="GKE クラスタの準備" duration="8">
+        <p>Config Sync を適用する GKE クラスタを作成します。</p>
+<pre>gcloud container clusters create acm-cluster \
+  --region asia-northeast1 \
+  --workload-pool $(gcloud config get-value project).svc.id.goog \
+  --scopes gke-default,cloud-source-repos-ro
+</pre>
+<p>操作しているユーザーに<code>cluster-admin</code>のロールを付与してクラスタを管理できるように <a href="https://kubernetes.io/docs/reference/access-authn-authz/rbac/" target="_blank">ClusterRoleBinding</a> を作成します。</p>
+<pre>kubectl create clusterrolebinding cluster-admin-binding \
+  --clusterrole cluster-admin \
+  --user $(gcloud config get-value account)
+</pre>
+<p>作成した GKE クラスタを Anthos に登録します。</p>
+<pre>gcloud beta container hub memberships register acm-cluster \
+  --gke-cluster asia-northeast1/acm-cluster \
+  --enable-workload-identity
+</pre>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="Source Repository の準備" duration="2">
+        <p>Kubernetes のマニフェストを管理するための Source Repository を作成します。</p>
+<pre>gcloud source repos create gitops
+</pre>
+<p>Config Sync にはリポジトリへの読み取り権限が必要です。 このラボではサービスアカウントを利用して権限を付与します。</p>
+<pre>gcloud projects add-iam-policy-binding $(gcloud config get-value project) \
+  --member serviceAccount:$(gcloud projects describe $(gcloud config get-value project) --format &#34;value(projectNumber)&#34;)-compute@developer.gserviceaccount.com \
+  --role roles/source.reader
+</pre>
+<aside class="warning"><p> サービスアカウントによる認証は <a href="https://cloud.google.com/source-repositories" target="_blank">Cloud Source Repositories</a> でのみサポートされています。その他の認証方法は<a href="https://cloud.google.com/kubernetes-engine/docs/add-on/config-sync/how-to/installing#git-creds-secret" target="_blank">ドキュメント</a>を参照してください。</p>
+</aside>
+<p>今回の GKE クラスタは <a href="https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity" target="_blank">Workload Identity</a> が有効になっているため Google サービスアカウント と Kubernetes サービスアカウント を紐付ける必要があります。</p>
+<pre>gcloud iam service-accounts add-iam-policy-binding \
+  $(gcloud projects describe $(gcloud config get-value project) --format &#34;value(projectNumber)&#34;)-compute@developer.gserviceaccount.com \
+  --role roles/iam.workloadIdentityUser \
+  --member &#34;serviceAccount:$(gcloud config get-value project).svc.id.goog[config-management-system/importer]&#34;
+</pre>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="Config Sync の構築" duration="3">
+        <p><a href="https://console.cloud.google.com/anthos/config_management" target="_blank">Config Management</a> にアクセスして <strong>acm-cluster</strong> を選択して <strong>構成</strong> をクリックしてください。</p>
+<p class="image-container"><img alt="config-sync-1" src="img/b452815ce81ab352.png"></p>
+<aside class="warning"><p> Config Management は日本語表記では「構成管理」となっています。</p>
+</aside>
+<p><strong>ACM の Git リポジトリ認証</strong>の <strong>Authentication type</strong> に <strong>Google Cloud Repository</strong> を選択して<strong>続行</strong>ボタンをクリックしてください。</p>
+<p class="image-container"><img alt="config-sync-2" src="img/fb07a422e94a1352.png"></p>
+<p><strong>Config Sync を有効にする</strong>にチェックを入れて、URLに次のコマンドの結果を入力してください。</p>
+<pre>gcloud source repos describe gitops --format &#34;value(url)&#34;
+</pre>
+<p class="image-container"><img alt="config-sync-3" src="img/37b473206fc2e73c.png"></p>
+<p><strong>完了</strong> ボタンをクリックしてください。</p>
+
+
+      </google-codelab-step>
+    
+  </google-codelab>
+
+  <script src="https://storage.googleapis.com/codelab-elements/native-shim.js"></script>
+  <script src="https://storage.googleapis.com/codelab-elements/custom-elements.min.js"></script>
+  <script src="https://storage.googleapis.com/codelab-elements/prettify.js"></script>
+  <script src="https://storage.googleapis.com/codelab-elements/codelab-elements.js"></script>
+  <script src="//support.google.com/inapp/api.js"></script>
+
+</body>
+</html>

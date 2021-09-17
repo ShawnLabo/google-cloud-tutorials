@@ -1,0 +1,19 @@
+{
+  "environment": "web",
+  "format": "html",
+  "prefix": "https://storage.googleapis.com",
+  "mainga": "UA-49880327-14",
+  "updated": "2021-06-01T08:57:30+09:00",
+  "id": "doc",
+  "duration": 22,
+  "title": "Getting Started with Config Sync",
+  "summary": "Getting started with Config Sync",
+  "source": "tutorial.md",
+  "theme": "",
+  "status": [
+    "[draft]"
+  ],
+  "category": null,
+  "tags": [],
+  "url": "doc"
+}

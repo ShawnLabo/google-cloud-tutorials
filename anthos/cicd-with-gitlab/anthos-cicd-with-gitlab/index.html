@@ -1,0 +1,765 @@
+<!--
+ Copyright 2021 Google LLC
+
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+-->
+
+
+<!doctype html>
+
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, minimum-scale=1.0, initial-scale=1.0, user-scalable=yes">
+  <meta name="theme-color" content="#4F7DC9">
+  <meta charset="UTF-8">
+  <title>Modern CI/CD with Anthos</title>
+  <link rel="stylesheet" href="//fonts.googleapis.com/css?family=Source+Code+Pro:400|Roboto:400,300,400italic,500,700|Roboto+Mono">
+  <link rel="stylesheet" href="//fonts.googleapis.com/icon?family=Material+Icons">
+  <link rel="stylesheet" href="https://storage.googleapis.com/codelab-elements/codelab-elements.css">
+  <style>
+    .success {
+      color: #1e8e3e;
+    }
+    .error {
+      color: red;
+    }
+  </style>
+</head>
+<body>
+  <google-codelab-analytics gaid="UA-49880327-14"></google-codelab-analytics>
+  <google-codelab codelab-gaid="G-EFLGFLQ7TH"
+                  id="anthos-cicd-with-gitlab"
+                  title="Modern CI/CD with Anthos"
+                  environment="web"
+                  feedback-link="https://github.com/ShawnLabo/google-cloud-tutorials/issues">
+    
+      <google-codelab-step label="WIP: はじめに" duration="0">
+        <aside class="warning"><p> このラボは非公式です。Google Cloud の公式のチュートリアルではありません。</p>
+</aside>
+<h2 is-upgraded>WIP: 前提条件</h2>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="このラボについて" duration="0">
+        <p>このラボでは Anthos と GitLab.com を使ったモダンな CI/CD パイプラインの構築を学びます。</p>
+<h2 is-upgraded>参考リンク</h2>
+<ul>
+<li><a href="https://cloud.google.com/solutions/modern-ci-cd-with-anthos" target="_blank">Anthos を使用した最新の CI/CD</a></li>
+<li><a href="https://github.com/GoogleCloudPlatform/professional-services/tree/main/examples/anthos-cicd-with-gitlab" target="_blank">Modern CI/CD with Anthos: Demo Guide</a></li>
+</ul>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="準備" duration="0">
+        <h2 is-upgraded>Google Cloud</h2>
+<p>ラボを実施するための<a href="https://cloud.google.com/resource-manager/docs/creating-managing-projects" target="_blank">プロジェクトを作成</a>してください。 また、そのプロジェクトに有効な<a href="https://cloud.google.com/billing/docs/how-to/modify-project" target="_blank">ビリングアカウントをリンク</a>してください。</p>
+<h2 is-upgraded>GitLab.com</h2>
+<p>このラボでは <a href="https://gitlab.com" target="_blank">GitLab.com</a> を利用します。</p>
+<p>もしアカウントを持っていない場合は<a href="https://gitlab.com/users/sign_up" target="_blank">サインアップ</a>してください。 また、SSH鍵でのアクセスを設定していない場合は<a href="https://docs.gitlab.com/ee/ssh/" target="_blank">SSH鍵ペアを作成して GitLab.com に登録</a>してください。</p>
+<p>適当な名前の新しいパブリックグループを作成してください。 作成したグループに割り当てられたURLをメモしておいてください。 今後、このラボで作成されるリポジトリはすべてこのグループ内に作成されます。</p>
+<p class="image-container"><img alt="GitLab New Group" src="img/a484f1421a3eeec2.png"></p>
+<h2 is-upgraded>Google Cloud SDK</h2>
+<aside class="special"><p> Cloud Shell で作業している場合は不要です。</p>
+</aside>
+<p>Google Cloud SDK (gcloud) をインストールしていない場合は<a href="https://cloud.google.com/sdk/docs/install" target="_blank">ドキュメント</a>に従ってインストールしてください。</p>
+<p>必要なコンポーネントをインストールしてください。</p>
+<pre>gcloud components install alpha beta kubectl nomos
+</pre>
+<p>macOSとLinuxでは追加で<code>nomos</code>に対して以下の操作を行ってください。</p>
+<ul>
+<li><code>nomos</code> バイナリをパスの通ったディレクトリに移動  <ul>
+<li>(例) <code>mv /path/to/nomos /usr/local/bin/nomos</code></li>
+</ul>
+</li>
+<li><code>nomos</code> バイナリに実行権を付与  <ul>
+<li>(例) <code>chmod +x /usr/local/bin/nomos</code></li>
+</ul>
+</li>
+</ul>
+<p>使用するプロジェクトを設定してください。</p>
+<pre>gcloud config set project YOUR-PROJECT
+</pre>
+<h2 is-upgraded>API の有効化</h2>
+<p>利用する Google Cloud の API を有効化してください。</p>
+<pre>gcloud services enable \
+   anthos.googleapis.com \
+   anthosgke.googleapis.com \
+   anthosaudit.googleapis.com \
+   binaryauthorization.googleapis.com \
+   cloudbuild.googleapis.com \
+   containerscanning.googleapis.com \
+   cloudresourcemanager.googleapis.com \
+   container.googleapis.com \
+   gkeconnect.googleapis.com \
+   gkehub.googleapis.com \
+   serviceusage.googleapis.com \
+   stackdriver.googleapis.com \
+   monitoring.googleapis.com \
+   logging.googleapis.com
+</pre>
+<h2 is-upgraded>WIP: 環境変数の設定</h2>
+<p>以下の環境変数を設定してください。</p>
+<pre>export GROUP_NAME=&#34;&lt;your gitlab group name&gt;&#34;
+
+export PROJECT_ID=&#34;$(gcloud config get-value project)&#34;
+export PROJECT_NUMBER=&#34;$(gcloud projects describe &#34;${PROJECT_ID}&#34; --format=&#39;value(projectNumber)&#39;)&#34;
+export USER=&#34;&lt;user email you are using&gt;&#34;
+export GROUP_URI=&#34;&lt;your gitlab group URI&gt;&#34;
+export REGION=&#34;us-central1&#34;
+export ZONE=&#34;asia-northeast1-c&#34;
+</pre>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="GKEクラスタの作成とAnthosへの登録" duration="0">
+        <p>このラボでは<code>dev</code>と<code>prod</code>という2つのGKEクラスタを作成します。 <code>dev</code>クラスタは開発環境やテスト環境として利用するクラスタです。 <code>prod</code>クラスタは本番環境として利用します。</p>
+<aside class="special"><p> このラボでは同じプロジェクトに開発環境と本番環境を作成していますが、 実際の利用ではプロジェクトも分割することをおすすめします。</p>
+</aside>
+<h2 is-upgraded>GKEクラスタの作成</h2>
+<p><code>dev</code>クラスタを作成してください。</p>
+<pre>gcloud container clusters create dev \
+  --workload-pool=$(gcloud config get-value project).svc.id.goog \
+  --machine-type e2-standard-4 \
+  --zone asia-northeast1-c \
+  --labels environment=dev
+</pre>
+<p><code>prod</code>クラスタを作成してください。</p>
+<pre>gcloud container clusters create prod \
+  --workload-pool=$(gcloud config get-value project).svc.id.goog \
+  --machine-type e2-standard-4 \
+  --zone asia-northeast1-c \
+  --labels environment=prod
+</pre>
+<h2 is-upgraded>必要な権限の付与</h2>
+<p>操作しているユーザーに必要な権限を付与します。</p>
+<pre>gcloud projects add-iam-policy-binding \
+  $(gcloud config get-value project) \
+  --member user:$(gcloud config get-value account) \
+  --role roles/gkehub.admin \
+  --role roles/iam.serviceAccountAdmin \
+  --role roles/iam.serviceAccountKeyAdmin \
+  --role roles/resourcemanager.projectIamAdmin
+</pre>
+<h2 is-upgraded>Anthosへの登録</h2>
+<p>作成したGKEクラスタを<a href="https://cloud.google.com/anthos/multicluster-management/connect/registering-a-cluster" target="_blank">Anthosへ登録</a>します。</p>
+<p><code>dev</code>クラスタを登録してください。</p>
+<pre>gcloud beta container hub memberships register dev \
+  --gke-uri $(gcloud container clusters list --uri | grep dev) \
+  --enable-workload-identity
+</pre>
+<p><code>prod</code>クラスタを登録してください。</p>
+<pre>gcloud beta container hub memberships register prod \
+  --gke-uri $(gcloud container clusters list --uri | grep prod) \
+  --enable-workload-identity
+</pre>
+<p>登録されたことを確認してください。</p>
+<pre>gcloud beta container hub memberships list
+</pre>
+<aside class="special"><p> Anthos マネージドクラスタは<a href="https://console.cloud.google.com/anthos/clusters" target="_blank">コンソール</a>でも確認できます。</p>
+</aside>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="Anthos Config Managementの設定" duration="0">
+        <p><a href="https://cloud.google.com/anthos/config-management" target="_blank">Anthos Config Management</a> (ACM) は Anthos の主要コンポーネントのひとつです。 Anthos Config Management ではカスタムポリシーを含む設定を定義し、オンプレやマルチクラウドでその設定を適用することができます。</p>
+<p>Anthos Config Management では設定やポリシーをGitリポジトリで管理できます。 典型的にはこのリポジトリは運用チームやセキュリティチームで管理します。 このラボで紹介するリポジトリモデルを使うと、開発者はアプリケーションの開発用のリポジトリで開発に専念して、運用チームやセキュリティチームはインフラに専念することができます。 クラスタがAnthos Config Managementリポジトリと同期している限り、Anthos Config Managementリポジトリ以外を使った方法での変更はできません。 これにより、構成を作成・変更する際にバージョン管理システムに伴うすべての利点を活用できます。</p>
+<aside class="special"><p> より詳しい情報は<a href="https://cloud.google.com/anthos-config-management/docs/concepts" target="_blank">Anthos Config Managementのドキュメント</a>を参照してください。</p>
+</aside>
+<h2 is-upgraded>Anthos Config Managementの有効化</h2>
+<p>Anthos Config Managementを有効化してください。</p>
+<pre>gcloud alpha container hub config-management enable
+</pre>
+<h2 is-upgraded>GitLabプロジェクトの作成</h2>
+<p>作成したGitLab.comのパグリックグループに新しく<code>acm</code>というパブリックプロジェクトを作成してください。</p>
+<p class="image-container"><img alt="GitLab new project acm" src="img/422844a5115d3a4f.png"></p>
+<p>作成した空のリポジトリをクローンして<a href="https://cloud.google.com/anthos-config-management/docs/config-sync-overview" target="_blank">Config Sync</a>用に初期化してください。</p>
+<pre>cd ~
+mkdir $GROUP_NAME
+cd $GROUP_NAME
+git clone git@gitlab.com:$GROUP_NAME/acm.git
+cd acm
+git switch -c main
+nomos init
+</pre>
+<p>次のようなディレクトリとファイルが作成されます。</p>
+<pre>.
+├── README.md
+├── cluster
+├── clusterregistry
+├── namespaces
+└── system
+    ├── README.md
+    └── repo.yaml
+</pre>
+<aside class="special"><p> 階層リポジトリの詳細は<a href="https://cloud.google.com/anthos-config-management/docs/concepts/hierarchical-repo" target="_blank">ドキュメント</a>を参照してください。</p>
+</aside>
+<h2 is-upgraded>Config Sync Operator のデプロイ</h2>
+<p><a href="https://cloud.google.com/kubernetes-engine/docs/add-on/config-sync/how-to/installing#git-creds-secret" target="_blank">Config Sync Operator</a>はKubernetesクラスタにConfig Syncの機能を提供する<a href="https://kubernetes.io/docs/concepts/extend-kubernetes/operator/" target="_blank">Operator</a>です。</p>
+<p>Operatorのマニフェストファイルをダウンロードしてください。</p>
+<pre>cd ~/$GROUP_NAME/acm
+mkdir setup
+cd setup
+gsutil cp gs://config-management-release/released/latest/config-management-operator.yaml config-management-operator.yaml
+</pre>
+<p>ダウンロードしたマニフェストを適用してConfig Sync Operatorを<code>dev</code>クラスタと<code>prod</code>クラスタにデプロイしてください。</p>
+<pre>gcloud container clusters get-credentials dev --zone asia-northeast1-c
+kubectl apply -f config-management-operator.yaml
+gcloud container clusters get-credentials prod --zone asia-northeast1-c
+kubectl apply -f config-management-operator.yaml
+</pre>
+<h2 is-upgraded>Config Sync Operator の設定</h2>
+<p>それぞれのクラスタに対して、Config Syncの設定ファイルを作成します。</p>
+<p><code>setup</code>ディレクトリに移動してください。</p>
+<pre>cd ~/$GROUP_NAME/acm
+</pre>
+<p><code>dev</code>クラスタ用に<code>dev</code>ブランチを同期対象とする <code>config-management-dev.yaml</code> を作成してください。</p>
+<pre>cd ~/$GROUP_NAME/acm/setup
+cat &gt; config-management-dev.yaml &lt;&lt; EOF
+apiVersion: configmanagement.gke.io/v1
+kind: ConfigManagement
+metadata:
+  name: config-management
+spec:
+  clusterName: dev
+  git:
+    syncRepo: https://gitlab.com/$GROUP_NAME/acm.git
+    syncBranch: dev
+    secretType: none
+  policyController:
+    enabled: true
+EOF
+</pre>
+<p><code>dev</code>クラスタに設定を適用してください。</p>
+<pre>gcloud container clusters get-credentials dev --zone asia-northeast1-c
+kubectl apply -f config-management-dev.yaml
+</pre>
+<aside class="special"><p> 同期するgitリポジトリに関する設定に加えて、後述するPolicy Controllerを使用するために <code>policyController.enabled</code>を<code>true</code>に設定しています。</p>
+</aside>
+<p><code>prod</code>クラスタ用に <code>main</code> ブランチを同期対象とする <code>config-management-prod.yaml</code> を作成してください。</p>
+<pre>cat &gt; config-management-prod.yaml &lt;&lt; EOF
+apiVersion: configmanagement.gke.io/v1
+kind: ConfigManagement
+metadata:
+  name: config-management
+spec:
+  clusterName: prod
+  git:
+    syncRepo: https://gitlab.com/$GROUP_NAME/acm.git
+    syncBranch: main
+    secretType: none
+  policyController:
+    enabled: true
+EOF
+</pre>
+<p><code>prod</code>クラスタに設定を適用してください。</p>
+<pre>gcloud container clusters get-credentials prod --zone asia-northeast1-c
+kubectl apply -f config-management-prod.yaml
+</pre>
+<aside class="warning"><p> このラボではパブリックリポジトリを使用しているため <code>secretType</code> を <code>none</code> に設定しています。 プライベートリポジトリを使用する場合は<a href="https://cloud.google.com/kubernetes-engine/docs/add-on/config-sync/how-to/installing#git-creds-secret" target="_blank">ドキュメント</a>に従ってアクセス権を付与するための設定をしてください。</p>
+</aside>
+<h2 is-upgraded>ClusterSelectors の設定</h2>
+<p><a href="https://cloud.google.com/kubernetes-engine/docs/add-on/config-sync/how-to/clusterselectors" target="_blank">ClusterSelector</a>を使うと特定のクラスタ群にのみマニフェストを適用することが可能になります。</p>
+<p><code>dev</code>クラスタを選択するためのClusterSelectorを作成してください。</p>
+<pre>cd ~/$GROUP_NAME/acm/clusterregistry
+cat &gt; dev-cluster-selector.yaml &lt;&lt; EOF
+kind: Cluster
+apiVersion: clusterregistry.k8s.io/v1alpha1
+metadata:
+ name: dev
+ labels:
+   environment: dev
+---
+kind: ClusterSelector
+apiVersion: configmanagement.gke.io/v1
+metadata:
+ name: dev-cluster-selector
+spec:
+ selector:
+   matchLabels:
+     environment: dev
+EOF
+</pre>
+<p><code>Cluster</code>リソースを使ってクラスタにラベルを付与できます。 この例では<code>dev</code>クラスタに<code>environment: dev</code>というラベルを付与します。</p>
+<p><code>ClusterSelector</code> は特定のラベルの組み合わせを持つクラスタを選択するためのリソースです。 この例では<code>environment: dev</code>というラベルを選択するための<code>dev-cluster-selector</code>というClusterSelectorを作成します。</p>
+<p>同じように<code>prod</code>用のマニフェストを作成してください。</p>
+<pre>cat &gt; prod-cluster-selector.yaml &lt;&lt; EOF
+kind: Cluster
+apiVersion: clusterregistry.k8s.io/v1alpha1
+metadata:
+ name: prod
+ labels:
+   environment: prod
+---
+kind: ClusterSelector
+apiVersion: configmanagement.gke.io/v1
+metadata:
+ name: prod-cluster-selector
+spec:
+ selector:
+   matchLabels:
+     environment: prod
+EOF
+</pre>
+<aside class="warning"><p> ClusterSelector を使用するためには各クラスタに一意な名前をつける必要があります。</p>
+</aside>
+<h2 is-upgraded>Namespace の設定</h2>
+<p>Anthos Config Management ではマニフェストを<a href="https://cloud.google.com/kubernetes-engine/docs/add-on/config-sync/concepts/namespace-inheritance" target="_blank">Namespaceスコープで管理</a>することができます。 また、前述のClusterSelectorと組合せることで柔軟な構成管理が可能になります。</p>
+<p>今回使用する3つのNamespaceのマニフェストファイルを作成します。</p>
+<p>まず、<code>dev</code>クラスタに適用する<code>dev</code> namespaceを作成してください。</p>
+<pre>cd ~/$GROUP_NAME/acm/namespaces
+mkdir dev
+cd dev
+cat &gt; namespace.yaml &lt;&lt; EOF
+apiVersion: v1
+kind: Namespace
+metadata:
+ name: dev
+ annotations:
+   configmanagement.gke.io/cluster-selector: dev-cluster-selector
+EOF
+</pre>
+<p><code>dev</code>クラスタに適用する <code>staging</code> namespaceを作成してください。</p>
+<pre>cd ..
+mkdir stage
+cd stage
+cat &gt; namespace.yaml &lt;&lt; EOF
+apiVersion: v1
+kind: Namespace
+metadata:
+ name: stage
+ annotations:
+   configmanagement.gke.io/cluster-selector: dev-cluster-selector
+EOF
+</pre>
+<p><code>prod</code> クラスタに適用する <code>prod</code> namespace を作成してください。</p>
+<pre>cd ..
+mkdir prod
+cd prod
+cat &gt; namespace.yaml &lt;&lt; EOF
+apiVersion: v1
+kind: Namespace
+metadata:
+ name: prod
+ annotations:
+   configmanagement.gke.io/cluster-selector: prod-cluster-selector
+EOF
+</pre>
+<h2 is-upgraded>制約の設定</h2>
+<p><a href="https://cloud.google.com/anthos-config-management/docs/concepts/policy-controller" target="_blank">Policy Controller</a>を使うとクラスタに適用するマニフェストに制約を設けることができます。 ポリシーを遵守していないAPIリクエストをブロックしたり、違反を監査・報告したりできます。</p>
+<aside class="special"><p> Policy Controllerはオープンソースの<a href="https://open-policy-agent.github.io/gatekeeper/website/docs/" target="_blank">Open Policy Agent Gatekeeper</a>プロジェクトをベースにしています。</p>
+</aside>
+<p>このラボでは <code>prod</code> namespaceに対して非特権コンテナの制約を設定します。</p>
+<p><code>cluster/</code>ディレクトリに<code>constraint-restrict-privileged-container.yaml</code>を作成してください。</p>
+<pre>cd ~/$GROUP_NAME/acm/cluster
+cat &gt; constraint-restrict-privileged-container.yaml &lt;&lt; EOF
+apiVersion: templates.gatekeeper.sh/v1beta1
+kind: ConstraintTemplate
+metadata:
+ name: noprivilegedcontainer
+ annotations:
+    configmanagement.gke.io/cluster-selector: prod-cluster-selector
+spec:
+ crd:
+   spec:
+     names:
+       kind: NoPrivilegedContainer
+ targets:
+   - target: admission.k8s.gatekeeper.sh
+     rego: |
+       package noprivileged
+       violation[{&#34;msg&#34;: msg, &#34;details&#34;: {}}] {
+           c := input_containers[_]
+           c.securityContext.privileged
+           msg := sprintf(&#34;Privileged container is not allowed: %v, securityContext: %v&#34;, [c.name, c.securityContext])
+       }
+       input_containers[c] {
+           c := input.review.object.spec.containers[_]
+       }
+       input_containers[c] {
+           c := input.review.object.spec.initContainers[_]
+       }
+       input_containers[c] {
+           c := input.review.object.spec.template.spec.containers[_]
+       }
+       input_containers[c] {
+           c := input.review.object.spec.template.spec.initContainers[_]
+       }
+---
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: NoPrivilegedContainer
+metadata:
+ name: no-privileged-container
+ annotations:
+    configmanagement.gke.io/cluster-selector: prod-cluster-selector
+spec:
+ enforcementAction: dryrun
+ match:
+   kinds:
+     - apiGroups: [&#34;*&#34;]
+       kinds: [&#34;Deployment&#34;, &#34;Pod&#34;]
+EOF
+</pre>
+<aside class="special"><p> Anthos Policy Controllerには<a href="https://cloud.google.com/anthos-config-management/docs/reference/constraint-template-library" target="_blank">制約テンプレートライブラリ</a>の制約テンプレートが含まれています。</p>
+</aside>
+<h2 is-upgraded>変更の適用</h2>
+<p>ここまでローカルでマニフェストファイルを作ってきました。 GitLabのリポジトリに変更をプッシュしてクラスタに変更を適用します。</p>
+<p>変更をプッシュしてください。</p>
+<pre>cd ~/$GROUP_NAME/acm
+git add -A
+git commit -m &#34;Set up ACM&#34;
+git push -u origin main
+</pre>
+<p><code>dev</code>クラスタは<code>dev</code>ブランチに同期されるようになっているので、同じ内容を<code>dev</code>ブランチとしてプッシュしてください。</p>
+<pre>git switch -c dev
+git push -u origin dev
+</pre>
+<p>変更が同期されているかどうかを確認してください。</p>
+<pre>nomos status
+</pre>
+<p><code>SYNCED</code>と表示されていれば同期が完了しています。 <code>PENDING</code>と表示されている場合はConfig Syncは正常に動作していますがまだ同期が完了していない状態です。</p>
+<aside class="special"><p> Config Syncのステータスは<a href="https://console.cloud.google.com/anthos/config_management" target="_blank">コンソール</a>でも確認できます。 <img alt="Config Sync Status" src="img/8abaa9fdc97afbf7.png"></p>
+</aside>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="CI/CD パイプラインの準備" duration="0">
+        <p>このラボではプラットフォーム運用・セキュリティチームが管理する<code>platform-admin</code>というリポジトリに再利用可能なCI/CDの部品を用意して、各アプリケーションチームがそれらの部品を組み合わせてCI/CDパイプラインを構築することを想定しています。</p>
+<p>CI/CDには<a href="https://docs.gitlab.com/ee/ci/" target="_blank">GitLab CI/CD</a>を利用します。 GitLab CI/CD では<code>.gitlab-ci.yml</code>というYAMLファイルにCI/CDのステップを定義します。</p>
+<p>このセクションではこのラボの全体を通してどのようなCI/CDパイプラインを構築するか把握します。 また、あとに続くセクションでCI/CDパイプラインをステップごとに構築できるように準備をします。 準備として、<code>platform-admin</code>リポジトリに1つ部品を用意して、アプリケーションのリポジトリでその部品を利用したCI/CDパイプラインを定義します。</p>
+<h2 is-upgraded>platform-admin リポジトリの作成</h2>
+<p><code>platform-admin</code> リポジトリを作成します。 <code>platform-admin</code> リポジトリでは、アプリケーションのCI/CDパイプラインで使うための再利用可能なCI/CDの部品が管理されます。 このリポジトリはプラットフォーム運用・セキュリティチームが管理します。</p>
+<aside class="special"><p> セキュリティチームやプラットフォーム運用チームが扱うリポジトリと 開発者が開発に利用するリポジトリを分割することで それぞれが自分たちの役割に集中することが可能になります。</p>
+</aside>
+<p>GitLab.comで作成したグループに<code>platform-admin</code>というパブリックプロジェクトを作成してください。</p>
+<p>ローカルにクローンしてください。</p>
+<pre>git clone git@gitlab.com:$GROUP_NAME/platform-admin.git ~/$GROUP_NAME/platform-admin
+</pre>
+<h2 is-upgraded>ビルドステージの作成</h2>
+<p>CI/CD パイプラインの最初のステージとして、Dockerfileからコンテナイメージをビルドするステージを作成します。 <a href="https://docs.gitlab.com/ee/ci/yaml/#stages" target="_blank">ステージ</a>とはGitLab CI/CDにおけるCI/CDパイプラインの1つのステップのことを表します。 本ラボではステージの単位で再利用可能なCI/CDの部品を作成します。</p>
+<p>ビルドステージでは<a href="https://github.com/GoogleContainerTools/kaniko#kaniko---build-images-in-kubernetes" target="_blank">kaniko</a>を使ってコンテナイメージをビルドして、<a href="https://cloud.google.com/container-registry" target="_blank">Container Registry</a> (gcr.io) にプッシュします。</p>
+<p><code>platform-admin</code>に<code>build</code> ディレクトリを作成してください。</p>
+<pre>cd ~/$GROUP_NAME/platform-admin
+mkdir build
+</pre>
+<p><code>build</code>ディレクトリに <code>build-container.yaml</code> ファイルを作成してください。</p>
+<pre>cat &lt;&lt; &#39;EOF&#39; &gt; build/build-container.yaml
+build:
+ stage: Build
+ tags:
+   - prod
+ image:
+   name: gcr.io/kaniko-project/executor:debug
+   entrypoint: [&#34;&#34;]
+ script:
+   - echo &#34;Building container image and pushing to gcr.io in ${PROJECT_ID}&#34;
+   - /kaniko/executor --context ${CI_PROJECT_DIR} --dockerfile ${CI_PROJECT_DIR}/Dockerfile --destination ${HOSTNAME}/${PROJECT_ID}/${CONTAINER_NAME}:${CI_COMMIT_SHORT_SHA}
+EOF
+</pre>
+<p><code>PROJECT_ID</code>などの環境変数はアプリケーション側の<code>.gitlab-ci.yml</code>で設定します。 <code>CI_PROJECT_ID</code>などの環境変数は<a href="https://docs.gitlab.com/ee/ci/variables/predefined_variables.html" target="_blank">あらかじめGitLab CI/CDで定義</a>されています。</p>
+<aside class="special"><p> GitLab CI/CDでは<a href="https://docs.gitlab.com/ee/ci/yaml/index.html#image" target="_blank"><code>image</code></a>で指定したコンテナイメージを利用して処理をすることができます。</p>
+</aside>
+<p>変更をコミットしてプッシュしてください。</p>
+<pre>git add .
+git commit -m &#34;Add Build stage&#34;
+git push -u origin main
+</pre>
+<h2 is-upgraded>アプリケーションの準備</h2>
+<p>このラボではアプリケーションとして <a href="https://github.com/itodotimothy6/hello-kubernetes" target="_blank">hello-kubernetes</a> を利用します。 hello-kubernetesをCI/CDするためのCI/CDパイプラインを構築します。</p>
+<p><code>platform-admin</code>と同じように、GitLab.comで<code>hello-kubernetes</code>プロジェクトを作成してください。</p>
+<p>hello-kubernetesをダウンロードしてください。</p>
+<pre>git clone https://github.com/itodotimothy6/hello-kubernetes.git ~/$GROUP_NAME/hello-kubernetes
+cd ~/$GROUP_NAME/hello-kubernetes
+</pre>
+<p>元のリポジトリの情報を削除して、作成したGitLabのリポジトリにプッシュしてください。</p>
+<pre>rm -rf .git
+git init .
+git remote add origin git@gitlab.com:$GROUP_NAME/hello-kubernetes
+git add .
+git commit -m &#34;Initial commit&#34;
+git push -u origin main
+</pre>
+
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="Binary Authorization の設定" duration="0">
+        <p>このセクションでは<a href="https://cloud.google.com/binary-authorization" target="_blank">Binary Authorization</a>を設定します。 Binary Authorization はセキュアなコンテナ サプライ チェーンを構築するためのコンポーネントのひとつです。 Binary Authorization を使うと、脆弱性のあるソフトウェアや不正なソフトウェアをデプロイしてしまうリスクを軽減することができます。</p>
+<p>このラボでは、クラスターに対して以下のようなルールをBinary Authorizationで強制します。</p>
+<ul>
+<li><code>dev</code>クラスタ、<code>prod</code>クラスタへデプロイするコンテナイメージは脆弱性スキャンで問題ないことを確認済みであること</li>
+<li><code>prod</code>クラスタへデプロイするコンテナイメージはQAテストで問題ないことを確認済みであること</li>
+</ul>
+<p>Binary Authorizationを使ったコンテナ サプライ チェーンでは、脆弱性スキャンやQAテストなどの各ステップで問題ないイメージに署名をします。 そして、デプロイの際に署名を検証することによってイメージをデプロイしていいかどうかを判断します。</p>
+<h2 is-upgraded>環境変数の設定</h2>
+<p>次の環境変数を設定してください。 このセクションで共通して利用します。</p>
+<pre>project_id=$(gcloud config get-value project)
+project_number=$(gcloud projects describe $project_id --format=&#39;value(projectNumber)&#39;)
+build_sa_email=&#34;${project_number}@cloudbuild.gserviceaccount.com&#34;
+</pre>
+<h2 is-upgraded>共通の準備</h2>
+<p>クラスタのBinary Authorizationを有効化してください。</p>
+<pre>gcloud container clusters update dev --enable-binauthz --zone asia-northeast1-c
+gcloud container clusters update prod --enable-binauthz --zone asia-northeast1-c
+</pre>
+<p>Cloud Buildのサービスアカウントに<a href="https://cloud.google.com/kubernetes-engine/docs/how-to/iam#predefined" target="_blank">Kubernetes Engine デベロッパー</a>のロールを付与してください。</p>
+<pre>gcloud projects add-iam-policy-binding \
+  $(gcloud config get-value project) \
+  --member serviceAccount:${cloud_build_sa_email} \
+  --role roles/container.developer
+</pre>
+<p>脆弱性スキャンとQAテストでの署名に利用する鍵ペアを管理する <a href="https://cloud.google.com/kms" target="_blank">Google Cloud Key Management Service (KMS)</a> の <a href="https://cloud.google.com/kms/docs/resource-hierarchy#key_rings" target="_blank">keyring</a> を作成してください。</p>
+<pre>gcloud kms keyrings create binauthz \
+  --project $project_id \
+  --location asia-northeast1
+</pre>
+<h2 is-upgraded>脆弱性スキャンに関する準備</h2>
+<p>コンテナのメタデータを管理する単位である<a href="https://cloud.google.com/container-analysis/docs/metadata-storage#note" target="_blank">Note</a>を<a href="https://cloud.google.com/container-analysis/docs/reference/rest/v1/projects.notes/create" target="_blank">作成</a>してください。</p>
+<pre>curl &#34;https://containeranalysis.googleapis.com/v1/projects/${project_id}/notes/?noteId=vulnz-note&#34; \
+  --request &#34;POST&#34; \
+  --header &#34;Content-Type: application/json&#34; \
+  --header &#34;Authorization: Bearer $(gcloud auth print-access-token)&#34; \
+  --header &#34;X-Goog-User-Project: ${project_id}&#34; \
+  --data-binary @- &lt;&lt;EOF
+{
+  &#34;name&#34;: &#34;projects/${project_id}/notes/vulnz-note&#34;,
+  &#34;attestation&#34;: {
+    &#34;hint&#34;: {
+      &#34;human_readable_name&#34;: &#34;Vulnerability scan note&#34;
+    }
+  }
+}
+EOF
+</pre>
+<p>作成したNoteをCloud Buildから操作できるように<a href="https://cloud.google.com/container-analysis/docs/ca-access-control" target="_blank">必要な権限</a>を<a href="https://cloud.google.com/container-analysis/docs/reference/rest/v1/projects.notes/setIamPolicy" target="_blank">付与</a>します。</p>
+<pre>curl &#34;https://containeranalysis.googleapis.com/v1/projects/${project_id}/notes/vulnz-note:setIamPolicy&#34; \
+  --request POST \
+  --header &#34;Content-Type: application/json&#34; \
+  --header &#34;Authorization: Bearer $(gcloud auth print-access-token)&#34; \
+  --header &#34;X-Goog-User-Project: ${PROJECT_ID}&#34; \
+  --data-binary @- &lt;&lt;EOF
+{
+  &#34;resource&#34;: &#34;projects/${project_id}/notes/vulnz-note&#34;,
+  &#34;policy&#34;: {
+    &#34;bindings&#34;: [
+      {
+        &#34;role&#34;: &#34;roles/containeranalysis.notes.occurrences.viewer&#34;,
+        &#34;members&#34;: [
+          &#34;serviceAccount:${build_sa_email}&#34;
+        ]
+      },
+      {
+        &#34;role&#34;: &#34;roles/containeranalysis.notes.attacher&#34;,
+        &#34;members&#34;: [
+          &#34;serviceAccount:${build_sa_email}&#34;
+        ]
+      }
+    ]
+  }
+}
+EOF
+</pre>
+<p>署名のための鍵ペアを作成してください。</p>
+<pre>gcloud kms keys create vulnz-signer \
+  --project $project_id \
+  --location asia-northeast1 \
+  --keyring binauthz \
+  --purpose asymmetric-signing \
+  --default-algorithm rsa-sign-pkcs1-4096-sha512
+</pre>
+<p>署名を検証するための Binary Authorization の <a href="https://cloud.google.com/binary-authorization/docs/key-concepts#attestors" target="_blank">Attestor</a> を作成してください。 Attestorはイメージをデプロイするときにそのイメージの署名が有効かどうかを検証します。</p>
+<pre>gcloud container binauthz attestors create vulnz-attestor \
+  --project $project_id \
+  --attestation-authority-note-project $project_id \
+  --attestation-authority-note vulns-note \
+  --description &#34;Vulnerability scan attestor&#34;
+</pre>
+<p>作成したAttestorに検証用の公開鍵を追加してください。</p>
+<pre>gcloud beta container binauthz attestors public-keys add \
+  --project $project_id \
+  --attestor vulnz-attestor \
+  --keyversion 1 \
+  --keyversion-keyring binauthz \
+  --keyversion-key vulnz-signer \
+  --keyversion-location asia-northeast1 \
+  --keyversion-project $project_id
+</pre>
+<p>TODO:</p>
+<pre>gcloud container binauthz attestors add-iam-policy-binding vulnz-attestor \
+  --project $project_id \
+  --member serviceAccount:$build_sa_email \
+  --role roles/binaryauthorization.attestorsViewer
+</pre>
+<p>TODO:</p>
+<pre>gcloud kms keys add-iam-policy-binding vulnz-signer \
+  --project project_id \
+  --location asia-northeast1 \
+  --keyring binauthz \
+  --member serviceAccount:$build_sa_email \
+  --role roles/cloudkms.signerVerifier
+</pre>
+<h2 is-upgraded>QAテストに関する準備</h2>
+<p>同じようにしてQAテストの署名をBinary Authorizationで検証するためのリソースを作成します。</p>
+<p>Noteを作成してください。</p>
+<pre>curl &#34;https://containeranalysis.googleapis.com/v1/projects/${project_id}/notes/?noteId=qa-note&#34; \
+  --request &#34;POST&#34; \
+  --header &#34;Content-Type: application/json&#34; \
+  --header &#34;Authorization: Bearer $(gcloud auth print-access-token)&#34; \
+  --header &#34;X-Goog-User-Project: ${project_id}&#34; \
+  --data-binary @- &lt;&lt;EOF
+{
+  &#34;name&#34;: &#34;projects/${project_id}/notes/qa-note&#34;,
+  &#34;attestation&#34;: {
+    &#34;hint&#34;: {
+      &#34;human_readable_name&#34;: &#34;QA note&#34;
+    }
+  }
+}
+EOF
+</pre>
+<p>Noteを操作するために必要な権限をCloud Buildのサービスアカウントに付与してください。</p>
+<pre>curl &#34;https://containeranalysis.googleapis.com/v1/projects/${project_id}/notes/qa-note:setIamPolicy&#34; \
+  --request POST \
+  --header &#34;Content-Type: application/json&#34; \
+  --header &#34;Authorization: Bearer $(gcloud auth print-access-token)&#34; \
+  --header &#34;X-Goog-User-Project: ${project_id}&#34; \
+  --data-binary @- &lt;&lt;EOF
+{
+  &#34;resource&#34;: &#34;projects/${project_id}/notes/qa-note&#34;,
+  &#34;policy&#34;: {
+    &#34;bindings&#34;: [
+      {
+        &#34;role&#34;: &#34;roles/containeranalysis.notes.occurrences.viewer&#34;,
+        &#34;members&#34;: [
+          &#34;serviceAccount:${build_sa_email}&#34;
+        ]
+      },
+      {
+        &#34;role&#34;: &#34;roles/containeranalysis.notes.attacher&#34;,
+        &#34;members&#34;: [
+          &#34;serviceAccount:${build_sa_email}&#34;
+        ]
+      }
+    ]
+  }
+}
+EOF
+</pre>
+<p>署名のための鍵ペアを作成してください。</p>
+<pre>gcloud kms keys create qa-signer \
+  --project $project_id \
+  --location asia-northeast1 \
+  --keyring binauthz \
+  --purpose asymmetric-signing \
+  --default-algorithm rsa-sign-pkcs1-4096-sha512
+</pre>
+<p>Attestorを作成してください。</p>
+<pre>gcloud container binauthz attestors create qa-attestor \
+ --project $project_id \
+ --attestation-authority-note-project $project_id \
+ --attestation-authority-note qa-note \
+ --description &#34;QA attestor&#34;
+</pre>
+<p>Attestorに検証用の公開鍵を追加してください。</p>
+<pre>gcloud beta container binauthz attestors public-keys add \
+ --project $project_id \
+ --attestor qa-attestor \
+ --keyversion 1 \
+ --keyversion-key qa-signer \
+ --keyversion-keyring binauthz \
+ --keyversion-location asia-northeast1 \
+ --keyversion-project $project_id
+</pre>
+<p>TODO:</p>
+<pre>gcloud container binauthz attestors add-iam-policy-binding qa-attestor \
+ --project $project_id \
+ --member serviceAccount:$build_sa_email \
+ --role roles/binaryauthorization.attestorsViewer
+</pre>
+<p>TODO:</p>
+<pre></pre>
+<h2 is-upgraded>Binary Authorization ポリシーの設定</h2>
+<p>Binary Authorization の<a href="https://cloud.google.com/binary-authorization/docs/key-concepts" target="_blank">ポリシー</a>はGKEクラスタへのコンテナイメージのデプロイを制御するルールです。 各Google Cloudプロジェクトに1つのポリシーを設定できます。</p>
+<p>ポリシー YAML ファイルを作成してください。</p>
+<pre>mkdir ~/$GROUP_NAME/platform-admin/binauth
+cd ~/$GROUP_NAME/platform-admin/binauth
+cat &lt;&lt;EOF &gt; binauth.yaml
+defaultAdmissionRule:
+  enforcementMode: ENFORCED_BLOCK_AND_AUDIT_LOG
+  evaluationMode: ALWAYS_DENY
+globalPolicyEvaluationMode: ENABLE
+admissionWhitelistPatterns:
+  - namePattern: gitlab/gitlab-runner-helper:x86_64-8fa89735
+  - namePattern: gitlab/gitlab-runner-helper:x86_64-ece86343
+  - namePattern: gitlab/gitlab-runner:alpine-v13.6.0
+  - namePattern: gcr.io/abm-test-bed/gitlab-runner@sha256:8f623d3c55ffc783752d0b34097c5625a32a910a8c1427308f5c39fd9a23a3c0
+  - namePattern: google/cloud-sdk
+  - namePattern: gcr.io/cloud-builders/gke-deploy:latest
+  - namePattern: gcr.io/kaniko-project/*
+  - namePattern: gcr.io/cloud-solutions-images/kustomize:3.7
+  - namePattern: gcr.io/kpt-functions/gatekeeper-validate
+  - namePattern: gcr.io/kpt-functions/read-yaml
+  - namePattern: gcr.io/stackdriver-prometheus/*
+  - namePattern: gcr.io/$PROJECT_ID/cloudbuild-attestor
+  - namePattern: gcr.io/config-management-release/*
+clusterAdmissionRules:
+  asia-northeast1-c.dev:
+    evaluationMode: REQUIRE_ATTESTATION
+    enforcementMode: ENFORCED_BLOCK_AND_AUDIT_LOG
+    requireAttestationsBy:
+      - projects/$project_id/attestors/vulnz-attestor
+  asia-northeast1-c.prod:
+    evaluationMode: REQUIRE_ATTESTATION
+    enforcementMode: ENFORCED_BLOCK_AND_AUDIT_LOG
+    requireAttestationsBy:
+      - projects/$project_id/attestors/vulnz-attestor
+      - projects/$project_id/attestors/qa-attestor
+EOF
+</pre>
+<p>このポリシーでは、<code>clusterAdmissionRules</code>で各クラスタ固有のルールを設定しています。 <code>dev</code>クラスタ、<code>prod</code>クラスタともに、デプロイにイメージの署名を必須としています。 <code>dev</code>クラスタでは脆弱性検査の署名のみを必要として、<code>prod</code>クラスタでは脆弱性検査の署名とQAテストの署名を必須としています。</p>
+<aside class="special"><p> ポリシーの詳細は<a href="https://cloud.google.com/binary-authorization/docs/configuring-policy-cli" target="_blank">ドキュメント</a>を参照してください。 クラスタ単位以外でも、Kubernetes Service Account単位やNamespace単位で制御することができます。</p>
+</aside>
+<p>作成したポリシーを Binary Authorization にインポートしてください。</p>
+<pre>gcloud container binauthz policy import ./binauth.yaml
+</pre>
+
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="イメージへの署名" duration="0">
+        <p>このセクションでは前の前のセクションで作成した鍵を使ってイメージに署名します。 ローカルで署名のプロセスを試してからそのプロセスをCI/CDに組み込みます。</p>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="CI/CD パイプライン の構築" duration="0">
+        
+
+      </google-codelab-step>
+    
+  </google-codelab>
+
+  <script src="https://storage.googleapis.com/codelab-elements/native-shim.js"></script>
+  <script src="https://storage.googleapis.com/codelab-elements/custom-elements.min.js"></script>
+  <script src="https://storage.googleapis.com/codelab-elements/prettify.js"></script>
+  <script src="https://storage.googleapis.com/codelab-elements/codelab-elements.js"></script>
+  <script src="//support.google.com/inapp/api.js"></script>
+
+</body>
+</html>
