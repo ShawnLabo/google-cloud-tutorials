@@ -1,7 +1,7 @@
 ---
 id: global-app-with-anthos
 status: [draft]
-summary: Build a global scale application with Spanner and Multi Cluster Ingress
+summary: Cloud Spanner と Multi Cluster Ingress を使ってグローバルスケールのアプリケーションを構築します
 author: nownabe
 categories: Cloud,Anthos
 tags: cloud,anthos,kubernetes,spanner,gke
