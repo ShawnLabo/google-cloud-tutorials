@@ -1,0 +1,31 @@
+{
+  "environment": "web",
+  "format": "html",
+  "prefix": "https://storage.googleapis.com",
+  "mainga": "UA-191798031-4",
+  "updated": "2021-09-28T01:04:17Z",
+  "id": "quick-start-config-sync",
+  "duration": 38,
+  "title": "はじめての Config Sync",
+  "summary": "はじめての Config Sync",
+  "source": "anthos/quick-start-config-sync/LAB.md",
+  "theme": "",
+  "status": [
+    "[draft]"
+  ],
+  "category": [
+    "cloud",
+    "anthos"
+  ],
+  "tags": [
+    "acm",
+    "anthos",
+    "anthos-config-management",
+    "cloud",
+    "config-sync",
+    "kubernetes"
+  ],
+  "feedback": "https://github.com/ShawnLabo/google-cloud-tutorials/issues",
+  "ga": "UA-191798031-4",
+  "url": "quick-start-config-sync"
+}

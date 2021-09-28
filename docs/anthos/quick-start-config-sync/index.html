@@ -1,0 +1,214 @@
+
+<!doctype html>
+
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, minimum-scale=1.0, initial-scale=1.0, user-scalable=yes">
+  <meta name="theme-color" content="#4F7DC9">
+  <meta charset="UTF-8">
+  <title>はじめての Config Sync</title>
+  <link rel="stylesheet" href="//fonts.googleapis.com/css?family=Source+Code+Pro:400|Roboto:400,300,400italic,500,700|Roboto+Mono">
+  <link rel="stylesheet" href="//fonts.googleapis.com/icon?family=Material+Icons">
+  <link rel="stylesheet" href="https://storage.googleapis.com/codelab-elements/codelab-elements.css">
+  <style>
+    .success {
+      color: #1e8e3e;
+    }
+    .error {
+      color: red;
+    }
+  </style>
+</head>
+<body>
+  <google-codelab-analytics gaid="UA-191798031-4"></google-codelab-analytics>
+  <google-codelab codelab-gaid="UA-191798031-4"
+                  id="quick-start-config-sync"
+                  title="はじめての Config Sync"
+                  environment="web"
+                  feedback-link="https://github.com/ShawnLabo/google-cloud-tutorials/issues">
+    
+      <google-codelab-step label="はじめに" duration="5">
+        <aside class="warning"><p> このラボは非公式であり、Google Cloud の公式のチュートリアルではありません。</p>
+</aside>
+<h2 is-upgraded>前提条件</h2>
+<ul>
+<li>Google Cloud アカウント</li>
+<li>有効な Billing Account と紐付いている Google Cloud プロジェクト <ul>
+<li>クリーンアップしやすいようにこのラボ用の新規プロジェクトの利用をおすすめします</li>
+</ul>
+</li>
+<li>有効な Billing Account と紐付いている Google Cloud プロジェクト</li>
+<li><a href="https://cloud.google.com/sdk" target="_blank">Cloud SDK</a> (gcloud)</li>
+</ul>
+<h2 is-upgraded>Cloud SDK コンポーネントのインストール</h2>
+<aside class="special"><p> Cloud Shell の場合は必要ありません。</p>
+</aside>
+<p>必要な gcloud コンポーネントをインストールしてください。</p>
+<pre>gcloud components install kubectl alpha
+</pre>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="このラボについて" duration="1">
+        <p>このラボでは <a href="https://cloud.google.com/kubernetes-engine/docs/add-on/config-sync/config-sync-overview" target="_blank">Config Sync</a> について学びます。</p>
+<p>Config Sync は <a href="https://cloud.google.com/anthos/config-management" target="_blank">Anthos Config Management</a> のコンポーネントのひとつであり、GitOps の機能を Kubernetes に提供します。 Config Sync を使うと、Git リポジトリの変更を検知してリポジトリにある最新の Kubernetes のマニフェストを自動で Kubernetes クラスタに反映できます。</p>
+<p>このラボでは Config Sync を使って GitHub のサンプルリポジトリにある Kubernetes のマニフェストを GKE クラスタに自動反映するための設定を行います。</p>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="準備" duration="3">
+        <h2 is-upgraded>プロジェクトの設定</h2>
+<p>使用するプロジェクトを設定してください。</p>
+<pre>gcloud config set project YOUR-PROJECT
+</pre>
+<h2 is-upgraded>API の有効化</h2>
+<p>利用するサービスの API を有効化します。</p>
+<pre>gcloud services enable \
+  anthos.googleapis.com \
+  container.googleapis.com
+</pre>
+<h2 is-upgraded>Anthos Config Management の有効化</h2>
+<p>Anthos Config Management を有効化します。</p>
+<pre>gcloud alpha container hub config-management enable
+</pre>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="GKE クラスタの準備" duration="10">
+        <p>Config Sync を適用する GKE クラスタを作成します。</p>
+<pre>gcloud container clusters create acm-cluster \
+  --zone asia-northeast1-a \
+  --machine-type e2-standard-4 \
+  --workload-pool $(gcloud config get-value project).svc.id.goog
+</pre>
+<p>操作しているユーザーに <a href="https://kubernetes.io/docs/reference/access-authn-authz/rbac/#user-facing-roles" target="_blank"><code>cluster-admin</code></a> のロールを付与してクラスタを管理できるように <a href="https://kubernetes.io/docs/reference/access-authn-authz/rbac/" target="_blank">ClusterRoleBinding</a> を作成します。</p>
+<pre>kubectl create clusterrolebinding cluster-admin-binding \
+  --clusterrole cluster-admin \
+  --user $(gcloud config get-value account)
+</pre>
+<aside class="special"><p> Google Kubernetes Engine における RBAC については<a href="https://cloud.google.com/kubernetes-engine/docs/how-to/role-based-access-control" target="_blank">こちらのドキュメント</a>を参照してください。</p>
+</aside>
+<p>作成した GKE クラスタを Anthos に登録します。</p>
+<pre>gcloud beta container hub memberships register acm-cluster \
+  --gke-cluster asia-northeast1-a/acm-cluster \
+  --enable-workload-identity
+</pre>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="Cofig Sync の設定" duration="5">
+        <p>gcloud コマンドを使って作成したクラスタに Config Sync を設定します。</p>
+<pre>cat &lt;&lt;EOF &gt; config-management.yaml
+apiVersion: configmanagement.gke.io/v1
+kind: ConfigManagement
+metadata:
+  name: config-management
+  namespace: config-management-system
+spec:
+  sourceFormat: unstructured
+  git:
+    syncRepo: https://github.com/GoogleCloudPlatform/anthos-config-management-samples
+    syncBranch: init
+    secretType: none
+    policyDir: quickstart/multirepo/root
+EOF
+gcloud alpha container hub config-management apply \
+  --membership acm-cluster \
+  --config config-management.yaml
+</pre>
+<p>重要な項目についてそれぞれ次のような意味があります。</p>
+<ul>
+<li><code>spec.git.syncRepo</code> - 同期する Git リポジトリ</li>
+<li><code>spec.git.syncBranch</code> - 同期する Git ブランチ</li>
+<li><code>spec.git.secretType</code> - Git リポジトリにアクセスするための認証方法 <ul>
+<li>このラボではパブリック リポジトリが対象なので <code>none</code></li>
+</ul>
+</li>
+<li><code>spec.git.policyDir</code> - 同期するマニフェストが格納されているディレクトリ</li>
+</ul>
+<p>このラボの設定では <a href="https://github.com/GoogleCloudPlatform/anthos-config-management-sample" target="_blank">https://github.com/GoogleCloudPlatform/anthos-config-management-sample</a> リポジトリの <code>init</code> ブランチの <code>quickstart/multirepo/root</code> ディレクトリの構成をクラスタに同期します。</p>
+<aside class="special"><p> 設定の詳細は<a href="https://cloud.google.com/anthos-config-management/docs/how-to/installing-config-sync#configuring-config-sync" target="_blank">ドキュメント</a>を参照してください。</p>
+</aside>
+<p>実際に <a href="https://github.com/GoogleCloudPlatform/anthos-config-management-samples/tree/init/quickstart/multirepo/root" target="_blank">GitHub</a> にアクセスして、どのようなマニフェストがあるか確認してみましょう。 例えば、<a href="https://github.com/GoogleCloudPlatform/anthos-config-management-samples/blob/init/quickstart/multirepo/root/namespace-gamestore.yaml" target="_blank">namespace-gamestore.yaml</a>というファイルでは <code>gamestore</code> という Namespace が定義されています。</p>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="同期の確認" duration="10">
+        <p>Config Sync によって GitHub 上のマニフェストがクラスタに反映されているか確認します。</p>
+<p>まず、Config Sync のステータスを確認します。</p>
+<pre>gcloud alpha container hub config-management status
+</pre>
+<p>Status の列に <code>SYNCED</code> と表示されていれば同期が完了しています。</p>
+<aside class="warning"><p> 正常に処理できていても同期の初期段階でエラーが表示されることがあります。 同期が完了するとエラー表示は消えるので、しばらく待ってもう一度確認してください。</p>
+</aside>
+<p>次に、実際にクラスタに反映されているかどうかを確認します。 <code>gamestore</code> という Namespace が存在していることを <code>kubectl</code> コマンドで確認します。</p>
+<pre>kubectl get ns
+</pre>
+<p>次のように <code>gamestore</code> Namespace が表示されたら反映が成功しています。</p>
+<pre>$ kubectl get ns
+NAME                           STATUS   AGE
+config-management-monitoring   Active   5d2h
+config-management-system       Active   5d2h
+default                        Active   5d2h
+gamestore                      Active   5d2h
+gke-connect                    Active   5d2h
+kube-node-lease                Active   5d2h
+kube-public                    Active   5d2h
+kube-system                    Active   5d2h
+monitoring                     Active   5d2h
+resource-group-system          Active   5d2h
+</pre>
+<p>Config Sync で同期されたリソースには専用のラベルが付与されます。 ラベルによる絞り込みで Config Sync で管理されているオブジェクトのみを表示することができます。</p>
+<pre>$ kubectl get clusterroles -l app.kubernetes.io/managed-by=configmanagement.gke.io
+NAME                  CREATED AT
+namespace-reader      2021-06-02T04:36:23Z
+prometheus-acm        2021-06-02T04:36:32Z
+prometheus-operator   2021-06-02T04:36:23Z
+webstore-admin        2021-06-02T04:36:33Z
+</pre>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="管理オブジェクトの変更" duration="1">
+        <p>Config Sync により管理されているオブジェクトは手動で変更できないようになっています。 試しに、<code>gamestore</code> Namespace を削除してみます。</p>
+<pre>kubectl delete namespace gamestore
+</pre>
+<p>以下のようにエラーが表示されます。</p>
+<pre>$ kubectl delete namespace gamestore
+error: You must be logged in to the server (admission webhook &#34;v1.admission-webhook.configsync.gke.io&#34; denied the request: requester is not authorized to delete managed resources)
+</pre>
+<p><code>kubectl</code> コマンドで <code>gamestore</code> Namespace が削除されていないことを確認できます。</p>
+<pre>$ kubectl get ns gamestore
+NAME        STATUS   AGE
+gamestore   Active   5d2h
+</pre>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="おわりに" duration="3">
+        <p>以上でこのラボは終了です。</p>
+<p>クリーンアップする場合はプロジェクトごと削除するか、次のコマンドを実行してください。</p>
+<pre>gcloud container clusters delete acm-cluster --zone asia-northeast1-a
+gcloud beta container hub memberships delete acm-cluster
+</pre>
+
+
+      </google-codelab-step>
+    
+  </google-codelab>
+
+  <script src="https://storage.googleapis.com/codelab-elements/native-shim.js"></script>
+  <script src="https://storage.googleapis.com/codelab-elements/custom-elements.min.js"></script>
+  <script src="https://storage.googleapis.com/codelab-elements/prettify.js"></script>
+  <script src="https://storage.googleapis.com/codelab-elements/codelab-elements.js"></script>
+  <script src="//support.google.com/inapp/api.js"></script>
+
+</body>
+</html>
