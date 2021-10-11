@@ -37,7 +37,6 @@ Duration: 5
 gcloud components install kubectl alpha
 ```
 
-
 ## このラボについて
 Duration: 1
 
@@ -46,8 +45,7 @@ Duration: 1
 Config Sync は [Anthos Config Management](https://cloud.google.com/anthos/config-management) のコンポーネントのひとつであり、GitOps の機能を Kubernetes に提供します。
 Config Sync を使うと、Git リポジトリの変更を検知してリポジトリにある最新の Kubernetes のマニフェストを自動で Kubernetes クラスタに反映できます。
 
-このラボでは Config Sync を使って GitHub のサンプルリポジトリにある Kubernetes のマニフェストを GKE クラスタに自動反映するための設定を行います。
-
+このラボでは Config Sync を使って GitHub のサンプルリポジトリにある Kubernetes のマニフェストを GKE クラスタに自動反映するための設定をします。
 
 ## 準備
 Duration: 3
@@ -149,7 +147,7 @@ gcloud alpha container hub config-management apply \
 > aside positive
 > 設定の詳細は[ドキュメント](https://cloud.google.com/anthos-config-management/docs/how-to/installing-config-sync#configuring-config-sync)を参照してください。
 
-実際に [GitHub](https://github.com/GoogleCloudPlatform/anthos-config-management-samples/tree/init/quickstart/multirepo/root) にアクセスして、どのようなマニフェストがあるか確認してみましょう。
+実際に [GitHub](https://github.com/GoogleCloudPlatform/anthos-config-management-samples/tree/init/quickstart/multirepo/root) へアクセスして、どのようなマニフェストがあるか確認してみましょう。
 例えば、[namespace-gamestore.yaml](https://github.com/GoogleCloudPlatform/anthos-config-management-samples/blob/init/quickstart/multirepo/root/namespace-gamestore.yaml)というファイルでは `gamestore` という Namespace が定義されています。
 
 ## 同期の確認
@@ -194,7 +192,7 @@ resource-group-system          Active   5d2h
 ```
 
 Config Sync で同期されたリソースには専用のラベルが付与されます。
-ラベルによる絞り込みで Config Sync で管理されているオブジェクトのみを表示することができます。
+ラベルによる絞り込みで Config Sync に管理されているオブジェクトのみを表示できます。
 
 ```console
 $ kubectl get clusterroles -l app.kubernetes.io/managed-by=configmanagement.gke.io
