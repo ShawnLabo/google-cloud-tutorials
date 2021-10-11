@@ -110,7 +110,7 @@
       </google-codelab-step>
     
       <google-codelab-step label="GKE クラスタの作成" duration="13">
-        <p>このセクションでは北アメリカ、ヨーロッパ、アジアのリージョンにそれぞれクラスタを1つずつ作成します。</p>
+        <p>このセクションでは北アメリカ、ヨーロッパ、アジアのリージョンにそれぞれクラスタを 1 つずつ作成します。</p>
 <p><code>us-central1</code> (アイオワ) にクラスタを作成してください。</p>
 <pre>gcloud container clusters create us \
   --enable-ip-alias \
@@ -154,7 +154,7 @@ kubectl config rename-context \
     
       <google-codelab-step label="Config Sync の構成" duration="11">
         <p>このセクションでは作成した GKE クラスタの設定を GitOps で一元管理できるように <a href="https://cloud.google.com/anthos-config-management/docs/config-sync-overview" target="_blank">Config Sync</a> を構成します。</p>
-<p>Config Sync を利用すると Kubernetes クラスタの設定やポリシーを Git リポジトリで管理できます。 また、Git リポジトリを介さないクラスタへの変更を禁止することができるため、一貫したクラスタの管理が可能になります。</p>
+<p>Config Sync を利用すると Kubernetes クラスタの設定やポリシーを Git リポジトリで管理できます。 また、Git リポジトリを介さないクラスタへの変更を禁止できるため、一貫したクラスタの管理が可能になります。</p>
 <p class="image-container"><img alt="Config Sync Overview" src="img/f35d3f6be6655864.svg"></p>
 <h2 is-upgraded>Anthos への登録</h2>
 <p>作成した GKE クラスタを <a href="https://cloud.google.com/anthos/multicluster-management/connect/registering-a-cluster" target="_blank">Anthos へ登録</a>してください。</p>
@@ -306,7 +306,7 @@ git commit -m &#34;Configure Config Sync&#34;
   ]
 }
 </pre>
-<p><code>server_zone</code> プロパティはこのリクエストを処理した Pod が起動している Kubernetes ノード (Compute Engine のインスタンス) のゾーンです。 <code>server_zone</code> プロパティを見ることでどのゾーンでリクエストが処理されたかを確認できます。</p>
+<p><code>server_zone</code> プロパティはこのリクエストを処理した Pod が起動している Kubernetes ノード (Compute Engine のインスタンス) のゾーンです。 <code>server_zone</code> プロパティを見ることによりどのゾーンでリクエストが処理されたかを確認できます。</p>
 <p>各メッセージの <code>written_at</code> プロパティはそのメッセージの書き込みを処理した Pod のゾーンです。</p>
 <h3 is-upgraded>マイクロブログ メッセージの書き込み</h3>
 <p><code>POST /api/messages</code> で新しいメッセージを投稿できます。</p>

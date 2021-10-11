@@ -53,7 +53,7 @@
       <google-codelab-step label="このラボについて" duration="1">
         <p>このラボでは <a href="https://cloud.google.com/kubernetes-engine/docs/add-on/config-sync/config-sync-overview" target="_blank">Config Sync</a> について学びます。</p>
 <p>Config Sync は <a href="https://cloud.google.com/anthos/config-management" target="_blank">Anthos Config Management</a> のコンポーネントのひとつであり、GitOps の機能を Kubernetes に提供します。 Config Sync を使うと、Git リポジトリの変更を検知してリポジトリにある最新の Kubernetes のマニフェストを自動で Kubernetes クラスタに反映できます。</p>
-<p>このラボでは Config Sync を使って GitHub のサンプルリポジトリにある Kubernetes のマニフェストを GKE クラスタに自動反映するための設定を行います。</p>
+<p>このラボでは Config Sync を使って GitHub のサンプルリポジトリにある Kubernetes のマニフェストを GKE クラスタに自動反映するための設定をします。</p>
 
 
       </google-codelab-step>
@@ -133,7 +133,7 @@ gcloud alpha container hub config-management apply \
 <p>このラボの設定では <a href="https://github.com/GoogleCloudPlatform/anthos-config-management-sample" target="_blank">https://github.com/GoogleCloudPlatform/anthos-config-management-sample</a> リポジトリの <code>init</code> ブランチの <code>quickstart/multirepo/root</code> ディレクトリの構成をクラスタに同期します。</p>
 <aside class="special"><p> 設定の詳細は<a href="https://cloud.google.com/anthos-config-management/docs/how-to/installing-config-sync#configuring-config-sync" target="_blank">ドキュメント</a>を参照してください。</p>
 </aside>
-<p>実際に <a href="https://github.com/GoogleCloudPlatform/anthos-config-management-samples/tree/init/quickstart/multirepo/root" target="_blank">GitHub</a> にアクセスして、どのようなマニフェストがあるか確認してみましょう。 例えば、<a href="https://github.com/GoogleCloudPlatform/anthos-config-management-samples/blob/init/quickstart/multirepo/root/namespace-gamestore.yaml" target="_blank">namespace-gamestore.yaml</a>というファイルでは <code>gamestore</code> という Namespace が定義されています。</p>
+<p>実際に <a href="https://github.com/GoogleCloudPlatform/anthos-config-management-samples/tree/init/quickstart/multirepo/root" target="_blank">GitHub</a> へアクセスして、どのようなマニフェストがあるか確認してみましょう。 例えば、<a href="https://github.com/GoogleCloudPlatform/anthos-config-management-samples/blob/init/quickstart/multirepo/root/namespace-gamestore.yaml" target="_blank">namespace-gamestore.yaml</a>というファイルでは <code>gamestore</code> という Namespace が定義されています。</p>
 
 
       </google-codelab-step>
@@ -163,7 +163,7 @@ kube-system                    Active   5d2h
 monitoring                     Active   5d2h
 resource-group-system          Active   5d2h
 </pre>
-<p>Config Sync で同期されたリソースには専用のラベルが付与されます。 ラベルによる絞り込みで Config Sync で管理されているオブジェクトのみを表示することができます。</p>
+<p>Config Sync で同期されたリソースには専用のラベルが付与されます。 ラベルによる絞り込みで Config Sync に管理されているオブジェクトのみを表示できます。</p>
 <pre>$ kubectl get clusterroles -l app.kubernetes.io/managed-by=configmanagement.gke.io
 NAME                  CREATED AT
 namespace-reader      2021-06-02T04:36:23Z
