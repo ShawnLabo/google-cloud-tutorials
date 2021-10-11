@@ -6,7 +6,11 @@
         "space": "always"
       }
     },
-    "preset-ja-technical-writing": true,
+    "preset-ja-technical-writing": {
+      "sentence-length": {
+        "max": 120
+      }
+    },
     "spellcheck-tech-word": true
   }
 }
