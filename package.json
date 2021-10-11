@@ -1,0 +1,22 @@
+{
+  "name": "google-cloud-tutorials",
+  "private": true,
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ShawnLabo/google-cloud-tutorials.git"
+  },
+  "author": "nownabe",
+  "bugs": {
+    "url": "https://github.com/ShawnLabo/google-cloud-tutorials/issues"
+  },
+  "homepage": "https://github.com/ShawnLabo/google-cloud-tutorials#readme",
+  "devDependencies": {
+    "textlint": "^12.0.2",
+    "textlint-rule-preset-ja-spacing": "^2.2.0",
+    "textlint-rule-preset-ja-technical-writing": "^7.0.0",
+    "textlint-rule-spellcheck-tech-word": "^5.0.0"
+  }
+}
