@@ -102,7 +102,7 @@ gcloud services enable \
 
 Duration: 13
 
-このセクションでは北アメリカ、ヨーロッパ、アジアのリージョンにそれぞれクラスタを1つずつ作成します。
+このセクションでは北アメリカ、ヨーロッパ、アジアのリージョンにそれぞれクラスタを 1 つずつ作成します。
 
 `us-central1` (アイオワ) にクラスタを作成してください。
 
@@ -161,7 +161,7 @@ Duration: 11
 このセクションでは作成した GKE クラスタの設定を GitOps で一元管理できるように [Config Sync](https://cloud.google.com/anthos-config-management/docs/config-sync-overview) を構成します。
 
 Config Sync を利用すると Kubernetes クラスタの設定やポリシーを Git リポジトリで管理できます。
-また、Git リポジトリを介さないクラスタへの変更を禁止することができるため、一貫したクラスタの管理が可能になります。
+また、Git リポジトリを介さないクラスタへの変更を禁止できるため、一貫したクラスタの管理が可能になります。
 
 ![Config Sync Overview](./images/config-sync-overview.svg)
 
@@ -411,7 +411,7 @@ $ curl http://$MICROBLOG_HOST/api/messages | jq
 ```
 
 `server_zone` プロパティはこのリクエストを処理した Pod が起動している Kubernetes ノード (Compute Engine のインスタンス) のゾーンです。
-`server_zone` プロパティを見ることでどのゾーンでリクエストが処理されたかを確認できます。
+`server_zone` プロパティを見ることによりどのゾーンでリクエストが処理されたかを確認できます。
 
 各メッセージの `written_at` プロパティはそのメッセージの書き込みを処理した Pod のゾーンです。
 
