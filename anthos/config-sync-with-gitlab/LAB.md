@@ -13,14 +13,14 @@ feedback link: https://github.com/ShawnLabo/google-cloud-tutorials/issues
 
 ## はじめに
 
-Duration: 1
+Duration: 3
 
 > aside negative
 > このラボは Google Cloud の公式コンテンツではありません。
 
 ### 前提条件
 
-ラボを開始るる前に以下のものをあらかじめ準備してください。
+ラボを開始する前に以下のものをあらかじめ準備してください。
 
 - Google Cloud アカウント
 - ラボ用の Google Cloud プロジェクト
@@ -34,7 +34,7 @@ Duration: 1
 
 ### Cloud Shell 以外での操作
 
-Cloud Shell 以外で操作する場合は次のツールがインストールしてください。
+Cloud Shell 以外で操作する場合は次のツールをインストールしてください。
 
 - [Cloud SDK](https://cloud.google.com/sdk) (`gcloud` コマンド)
 - Git コマンド
@@ -42,22 +42,22 @@ Cloud Shell 以外で操作する場合は次のツールがインストール�
 また、ラボで使用する Cloud SDK コンポーネントをインストールしてください。
 
 ```console
-gcloud components install alpha beta kubectl nomos
+gcloud components install beta kubectl nomos
 ```
 
 ## このラボについて
 
-Duration: 999
+Duration: 3
 
 このラボでは複数の Kubernetes クラスタを GitOps で管理するためのパイプラインを構築します。
-マニフェストの YAML を管理するために[GitLab.com](https://gitlab.com)を利用します。
-また、[Anthos Config Management](https://cloud.google.com/anthos-config-management)の[Config Sync](https://cloud.google.com/anthos-config-management/docs/config-sync-overview)を使って Git リポジトリで管理されているマニフェストを各クラスタに同期します。
+マニフェストの YAML を管理するための Git リポジトリとして [GitLab.com](https://gitlab.com) を利用します。
+また、[Anthos Config Management](https://cloud.google.com/anthos-config-management) の [Config Sync](https://cloud.google.com/anthos-config-management/docs/config-sync-overview) を使って Git リポジトリで管理されているマニフェストを各クラスタに同期します。
 
 ![gitops](./images/gitops.png)
 
 ## パイプライン全体像
 
-Duration: 999
+Duration: 7
 
 このセクションでは、このラボで構築するパイプラインについて説明します。
 
@@ -72,19 +72,19 @@ Duration: 999
 
 - [GitLab.com](https://gitlab.com)
   - GitLab 社が提供する Git のホストが可能な DevOps プラットフォームです。
-  - このラボでは、アプリケーションの管理用に**myapp**プロジェクト、Kubernetes マニフェストの管理用に**gitops**プロジェクトをそれぞれ作成します。
+  - このラボでは、アプリケーションの管理用に **myapp** プロジェクト、Kubernetes マニフェストの管理用に **gitops** プロジェクトをそれぞれ作成します。
 - [Cloud Source Repository](https://cloud.google.com/source-repositories)
   - Google Cloud が提供する Git ホスティングサービスです。
-  - GitLab の Git リポジトリをミラーリングして、Google Cloud との連携に利用します。
+  - GitLab の Git リポジトリをミラーリングして Google Cloud との連携に利用します。
 - [Cloud Build](https://cloud.google.com/build)
   - Google Cloud が提供するサーバーレス CI/CD プラットフォームです。
-  - **myapp**プロジェクトが更新されると、最新のコンテナイメージをビルド・プッシュします。さらに、最新のイメージを利用した Kubernetes のマニフェスト YAML を**gitops**プロジェクトの新しいブランチにプッシュします。
+  - **myapp** プロジェクトが更新されると、最新のコンテナイメージをビルド・プッシュします。さらに、最新のイメージを利用した Kubernetes のマニフェスト YAML を **gitops** リポジトリの新しいブランチにプッシュします。
 - [Artifact Registry](https://cloud.google.com/artifact-registry)
   - Google Cloud が提供するビルドアーティファクト管理サービスです。
   - Cloud Build がビルドしたコンテナイメージを管理します。
 - [Google Kubernetes Engine](https://cloud.google.com/kubernetes-engine) (GKE)
   - Google Cloud が提供するマネージド Kubernetes プラットフォームです。
-  - このラボでは管理対象のクラスタを 3 つ作成します。そのうち 2 つは本番環境用クラスタで**gitops**プロジェクトの`prd`ブランチと同期します。残りの 1 つは開発環境用クラスタで**gitops**プロジェクトの`stg`ブランチと同期します。
+  - このラボでは管理対象のクラスタを 3 つ作成します。そのうち 2 つは本番環境用クラスタで **gitops** プロジェクトの `prd` ブランチと同期します。残りの 1 つは開発環境用クラスタで **gitops** プロジェクトの `stg` ブランチと同期します。
 - [Anthos Config Management](https://cloud.google.com/anthos/config-management) (ACM)
   - Google Cloud が提供する、1 つ以上の Kubernetes クラスタの構成とポリシーを一元管理するためのサービスです。
 - [Config Sync](https://cloud.google.com/anthos-config-management/docs/config-sync-overview)
@@ -93,30 +93,32 @@ Duration: 999
 ### デプロイ ワークフロー
 
 上記アーキテクチャにおいて、開発・テスト・デプロイをどのようなワークフローで実現するかを説明します。
-次の図では、**myapp**というアプリの開発からデプロイまでのワークフローを表しています。
+次の図では、**myapp** というアプリの開発からデプロイまでのワークフローを表しています。
 
 ![workflow](./images/workflow.png)
 
-このラボでは開発チームと運用チームという 2 つのチームを想定しています。開発チームは**myapp**アプリケーションの開発を担当し、運用チームは品質保証 (QA) テストを実施したり本番環境を変更したりします。
+このラボでは開発チームと運用チームという 2 つのチームを想定しています。開発チームは **myapp** アプリケーションの開発を担当し、運用チームは品質保証 (QA) テストを実施したり本番環境を変更したりします。
 
 > aside positive
 > このラボでは簡単にするためチームを 2 つにしましたが、開発チーム、品質保証チーム、運用チームと 3 つに分かれていてもこのワークフローは機能します。
 
 ワークフローの流れはこのようになります。
 
-1. 開発チームは**myapp**プロジェクトで開発する
-1. 開発者はデプロイしたいとき、**myapp**プロジェクトの`main`ブランチを更新する
-1. **myapp**プロジェクトの`main`ブランチが更新されたとき、Cloud Build により**gitops**プロジェクトに新しいブランチがプッシュされる。そのブランチには最新の Kubernetes マニフェストが含まれる。
-1. 開発者は**gitops**プロジェクトで自動生成されたブランチから`stg`ブランチに対する Merge Request を作成して品質保証チームに品質保証テストを依頼する
-1. 品質保証担当者はステージング環境の準備ができていれば Merge Request を承認してマージする
-1. Config Sync により`stg`ブランチのマニフェストがステージング環境の Kubernetes クラスタに同期される
-1. 品質保証担当者はステージング環境で品質保証テストを実施して、OK であれば`prd`ブランチに対して Merge Request を作成する
+1. 開発チームは **myapp** プロジェクトで開発する
+1. 開発者はデプロイしたいとき、**myapp** プロジェクトの `main` ブランチを更新する
+1. **myapp** プロジェクトの `main` ブランチが更新されたとき、Cloud Build により **gitops** プロジェクトに新しいブランチがプッシュされる。そのブランチには最新の Kubernetes マニフェストが含まれる。
+1. 開発者は **gitops** プロジェクトで自動生成されたブランチから `stg` ブランチに対する Merge Request を作成して運用チームに QA (品質保証) テストを依頼する
+1. QA 担当者はステージング環境の準備ができていれば Merge Request を承認してマージする
+1. Config Sync により `stg` ブランチのマニフェストがステージング環境の Kubernetes クラスタに同期される
+1. QA 担当者はステージング環境で品質保証テストを実施して、OK であれば `prd` ブランチに対して Merge Request を作成する
 1. 管理者は Merge Request を確認し、本番環境への適用が認められた場合に承認してマージする
-1. Config Sync により`prd`ブランチのマニフェストが本番環境の Kubernetes クラスタに同期される
+1. Config Sync により `prd` ブランチのマニフェストが本番環境の Kubernetes クラスタに同期される
 
 ## Google Cloud の準備
 
-Duration: 999
+Duration: 3
+
+Cloud Shell を開いてください。
 
 使用するプロジェクトを設定してください。
 
@@ -139,9 +141,9 @@ gcloud services enable \
 
 ## Git リポジトリの準備
 
-Duration: 999
+Duration: 10
 
-このセクションでは GitLab.com で**myapp**プロジェクトと**gitops**プロジェクトを作成します。
+このセクションでは GitLab.com で **myapp** プロジェクトと **gitops** プロジェクトを作成します。
 また、Cloud Source Repositories でも 2 つの Git リポジトリを作成して、GitLab とのミラーリングを設定します。
 
 ![instruction git](./images/instruction-git.png)
@@ -155,7 +157,7 @@ Duration: 999
 
 ![create group](./images/create-group.png)
 
-Group URL に設定した値を環境変数に設定してください。
+Group URL に設定した値を環境変数に設定してください。Group の URL としても利用されている ID です。
 
 ![group id](./images/group-id.png)
 
@@ -175,7 +177,7 @@ export GITLAB_GROUP="your-group"
 
 ![create blank project](./images/create-blank-project.png)
 
-Project name と Project slug に`myapp`と入力して**Create Project**ボタンをクリックしてください。
+Project name と Project slug に `myapp` と入力して **Create Project** ボタンをクリックしてください。
 
 ![create project](./images/create-project.png)
 
@@ -183,9 +185,9 @@ Project name と Project slug に`myapp`と入力して**Create Project**ボタ�
 
 ### Cloud Source Repositories の作成
 
-Cloud Source Repositories で`myapp`と`gitops`リポジトリを作成して、GitLab からのミラーリングを設定するための認証情報を取得します。
+Cloud Source Repositories で `myapp` と `gitops` リポジトリを作成して、GitLab からのミラーリングを設定するための認証情報を取得します。
 
-`myapp`リポジトリと`gitops`リポジトリを作成してください。
+`myapp` リポジトリと `gitops` リポジトリを作成してください。
 
 ```console
 gcloud source repos create myapp
@@ -237,26 +239,27 @@ EOF
 
 GitLab のリポジトリから Cloud Source Repositories のリポジトリへのミラーリングを設定します。
 
-GitLab の`myapp`リポジトリのメニューから**Settings**をクリックして**Repository**をクリックしてください。
+GitLab の `myapp` リポジトリのメニューから **Settings** をクリックして **Repository** をクリックしてください。
 
 ![settings repository](./images/settings-repository.png)
 
-**Mirroring repositories**セクションの**Expand**ボタンをクリックしてください。
-Cloud Shell で表示された`myapp`の URL と Password を入力して**Mirror repository**ボタンをクリックしてください。
+**Mirroring repositories** セクションの **Expand** ボタンをクリックしてください。
+Cloud Shell で表示された `myapp` の URL と Password を入力して **Mirror repository** ボタンをクリックしてください。
 
 ![mirroring repositories](./images/mirroring-repositories.png)
 
-同様に`gitops`リポジトリもミラーリングを設定してください。
+同様に `gitops` リポジトリもミラーリングを設定してください。
 
 ## コンテナイメージのビルド
 
-Duration: 999
+Duration: 12
 
 このセクションでは Cloud Build を使ってコンテナイメージのビルド・プッシュを自動化します。
-また、コンテナとしてデプロイするアプリケーションを作成して`myapp`リポジトリにコミットします。
+また、コンテナとしてデプロイするアプリケーションを作成して `myapp` リポジトリにコミットします。
 
 ![build image](./images/build-image.png)
 
+> aside negative
 > Cloud Shell から GitLab への SSH 接続をまだ設定していない場合は設定してください。
 > [GitLab and SSH Keys](https://docs.gitlab.com/ee/ssh/)
 
@@ -264,9 +267,13 @@ Duration: 999
 
 myapp アプリを実装してコミットします。
 
-GitLab の`myapp`リポジトリを Cloud Shell にクローンしてください。
+環境変数 `GITLAB_GROUP` に作成した GitLab の Group 名が格納されていることを確認してください。
 
-> 環境変数 `GITLAB_GROUP` に作成した GitLab の Group 名が格納されていることを確認してください。
+```console
+echo $GITLAB_GROUP
+```
+
+GitLab の `myapp` リポジトリを Cloud Shell にクローンしてください。
 
 ```console
 git clone ssh://git@gitlab.com/$GITLAB_GROUP/myapp ~/workshop/gitops/myapp
@@ -279,7 +286,7 @@ cd ~/workshop/gitops/myapp
 cloudshell workspace .
 ```
 
-**File**メニューの**New File**をクリックしてください。
+**File** メニューの **New File** をクリックしてください。
 
 ![new file](./images/new-file.png)
 
@@ -287,7 +294,7 @@ cloudshell workspace .
 
 ![new filename](./images/new-filename.png)
 
-次のソースコードをコピーして Cloud Shell Editor で`main.py`にペーストしてください。
+次のソースコードをコピーして Cloud Shell Editor で `main.py` にペーストしてください。
 
 ```console
 from flask import Flask
@@ -319,7 +326,7 @@ CMD ["python", "/main.py"]
 ```
 
 Cloud Shell 上で動作確認を行います。
-右上の**ターミナルを開く**をクリックしてください。
+右上の**ターミナルを開く** ボタンをクリックしてください。
 
 Docker イメージをビルドしてください。
 
@@ -380,9 +387,9 @@ gcloud beta builds triggers create cloud-source-repositories \
   --build-config cloudbuild.yaml
 ```
 
-`main`ブランチに変更があると`cloudbuild.yaml`に従ってビルドを実行するトリガーが作成されました。
+`main` ブランチに変更があると `cloudbuild.yaml` に従ってビルドを実行するトリガーが作成されました。
 
-次のコマンドで`cloudbuild.yaml`を作成してください。
+次のコマンドで `cloudbuild.yaml` を作成してください。
 
 ```console
 cat <<'EOF' > ~/workshop/gitops/myapp/cloudbuild.yaml
@@ -435,9 +442,9 @@ UPDATE_TIME: 2021-10-19T07:52:05
 
 ## GKE クラスタの作成と設定
 
-Duration: 999
+Duration: 20
 
-このセクションでは 3 つの Google Kubernetes Engine クラスタを作成して Config Sync により GitOps を設定します。
+このセクションでは 3 つの Google Kubernetes Engine クラスタを作成して Config Sync を設定します。
 
 ![create and configure clusters](./images/create-and-configure-clusters.png)
 
@@ -480,7 +487,7 @@ gcloud container clusters create stg \
 
 ### クラスタのフリートへの登録
 
-作成したクラスタをフリートへ登録します。フリートへ登録することで、Anthos Config Management が利用できるようになります。
+作成したクラスタをフリートへ登録します。フリートへ登録することで Anthos Config Management が利用できるようになります。
 
 > aside positive
 > [フリート](https://cloud.google.com/anthos/multicluster-management)は Anthos において複数の Kubernetes クラスタを管理するための論理グループです。
@@ -509,7 +516,8 @@ Anthos Config Management を有効化してください。
 gcloud beta container hub config-management enable
 ```
 
-ACM の Kubernetes Service Account と Workload Identity によって紐付ける Google Service Account を作成します。
+Cloud Source Repositories へアクセスするための Service Account を作成します。
+ACM の Kubernetes Service Account とは Workload Identity によってこの Google Service Account と紐付けます。
 
 ```console
 gcloud iam service-accounts create acm-root-reconciler
@@ -527,7 +535,7 @@ gcloud projects add-iam-policy-binding \
   --role roles/source.reader
 ```
 
-ACM の Kubernetes Service Account (`config-management-system/root-reconciler`)に作成した Google Service Account (`acm-root-reconciler@PROJET-ID.iam.gserviceaccount.com`)を Workload Identity で利用する権限を付与します。
+ACM の Kubernetes Service Account (`config-management-system/root-reconciler`)に作成した Google Service Account を Workload Identity で利用する権限を付与します。
 
 ```console
 gcloud iam service-accounts add-iam-policy-binding \
@@ -611,10 +619,10 @@ git push -u origin main
 
 ## Namespace の作成
 
-Duration: 999
+Duration: 10
 
 このセクションでは myapp アプリケーションのデプロイ先となる Kubernetes の Namespace `myapp` の YAML ファイルを作成します。
-また、そのファイルを`gitops`リポジトリに`stg`ブランチとしてプッシュして、Config Sync でクラスタに同期します。
+また、そのファイルを `gitops` リポジトリに `stg` ブランチとしてプッシュして、Config Sync でクラスタに同期します。
 
 ![create namespace](./images/create-namespace.png)
 
@@ -622,7 +630,7 @@ Duration: 999
 
 このラボでは Config Sync の[階層リポジトリ](https://cloud.google.com/anthos-config-management/docs/concepts/hierarchical-repo)を使ってマニフェストファイルを管理します。
 
-`gitops`リポジトリを次のコマンドで初期化してください。
+`gitops` リポジトリを次のコマンドで初期化してください。
 
 ```console
 cd ~/workshop/gitops/gitops
@@ -646,6 +654,9 @@ $ tree
 
 4 directories, 5 files
 ```
+
+> aside positive
+> Cloud Shell で `tree` コマンドは `sudo apt install tree` でインストールできます。
 
 この変更をコミットしてください。
 
@@ -685,8 +696,8 @@ git push
 
 ### stg ブランチの作成
 
-現段階では`gitops`リポジトリに`main`ブランチしかないため GKE クラスタには同期されません。
-ステージング環境用クラスタの Config Sync 同期元である`stg`ブランチを作成して、`myapp` Namespace が作成されることを確認します。
+現段階では `gitops` リポジトリに `main` ブランチしかないため GKE クラスタには同期されません。
+ステージング環境用クラスタの Config Sync 同期元である `stg` ブランチを作成して、`myapp` Namespace が作成されることを確認します。
 
 まず現在の Config Sync の状態を確認してください。
 
@@ -694,10 +705,10 @@ git push
 gcloud beta container hub config-management status
 ```
 
-3 つのクラスタすべて `Status: ERROR`となっています。
+3 つのクラスタすべて `Status: ERROR` または `Status: PENDING` となっています。
 エラーメッセージには、次のように同期元の Git ブランチがないという記述があります。
 
-```
+```console
 fatal: Remote branch prd not found in upstream origin
 ```
 
@@ -714,10 +725,10 @@ Config Sync の状態を確認してください。
 gcloud beta container hub config-management status
 ```
 
+`stg` クラスタが `Status: SYNCED` となっていれば、`stg` ブランチとの同期が成功しています。
+
 > aside negative
 > GitLab.com の[ミラーリング機能](https://docs.gitlab.com/ee/user/project/repository/mirror/)は 5 分に 1 回以下という制限があるため、同期に時間がかかる場合があります。
-
-`stg`クラスタが `Status: SYNCED` となっていれば、`stg`ブランチとの同期が成功しています。
 
 実際に`myapp` Namespace が作成されているか確認してください。
 
@@ -728,11 +739,11 @@ kubectl describe namespace myapp
 ```
 
 このとき、Label や Annotation に Config Management のプロパティが含まれていることも確認してください。
-例えば、`app.kubernetes.io/managed-by=configmanagement.gke.io`というラベルを見ることで Config Management によって管理されているリソースであることが確認できます。
+例えば、`app.kubernetes.io/managed-by=configmanagement.gke.io`というラベルを見ることで Config Management によって管理されているリソースであることを確認できます。
 
 ## マニフェストの CI/CD
 
-Duration: 999
+Duration: 10
 
 このセクションでは myapp アプリケーションの CI/CD を実現するために、`myapp`リポジトリの変更を反映したマニフェストファイルを自動で`gitops`リポジトリにプッシュするパイプラインを構築します。
 
@@ -750,7 +761,7 @@ Duration: 999
 
 ### デプロイキーを作成する
 
-このラボでは Cloud Build から GitLab へのアクセスに[デプロイキー](https://docs.gitlab.com/ee/user/project/deploy_keys/index.html)を利用します。
+このラボでは Cloud Build から GitLab へアクセスするために[デプロイキー](https://docs.gitlab.com/ee/user/project/deploy_keys/index.html)を利用します。
 また、Cloud Build から安全に秘密鍵を扱うために[Secret Manager](https://cloud.google.com/secret-manager)を利用します。
 
 デプロイキーを作成してください。
@@ -977,6 +988,9 @@ EOF
 cat ~/workshop/gitops/myapp/deploy.sh
 ```
 
+> aside positive
+> Secret Manager から取得したデプロイキーを使って SSH を設定していたり、`envsubst` コマンドで Deployment のテンプレートに最新のイメージタグを埋め込んでいたりすることを確認してください。
+
 作成したスクリプトを実行するように `cloudbuild.yaml` を修正してください。
 
 ```console
@@ -1024,12 +1038,12 @@ GitLab で `gitops` プロジェクトを確認してください。成功する
 
 ![gitops created branch](./images/gitops-created-branch.png)
 
-> aside
+> aside negative
 > `myapp` のミラーリングのタイミングによっては数分ほどかかる場合があります。
 
 ## ステージング環境へのデプロイ
 
-Duration: 999
+Duration: 8
 
 このセクションでは前のセクションで `gitops` リポジトリにプッシュされたブランチをマージして、ステージング環境に myapp アプリをデプロイします。
 
@@ -1102,9 +1116,13 @@ echo http://$(kubectl get ingress myapp -n myapp --output 'go-template={{(index 
 
 ![hello world](./images/hello-world.png)
 
+> aside negative
+> `ADDRESS` が空欄の場合やブラウザでエラーが表示される場合、Ingress によるロードバランサー作成が完了していません。
+> 正常に表示されるまで何度か試してください。
+
 ## 本番環境へのデプロイ
 
-Duration: 999
+Duration: 13
 
 このセクションでは myapp アプリを本番環境にデプロイします。
 本番環境では 2 つの GKE クラスタに myapp アプリがデプロイされます。
@@ -1120,7 +1138,7 @@ GitLab の`giops`プロジェクトにアクセスして **Repository**、**Bran
 
 ![new branch](./images/new-branch.png)
 
-**Branch name** に `prd` を入力して、**Create from** に `stg` を入力して、**Create branch** をクリックしてください。
+**Branch name** に `prd` を入力して、**Create from** に `stg` を選択して、**Create branch** をクリックしてください。
 
 ![create branch](./images/create-branch.png)
 
@@ -1190,9 +1208,9 @@ gcloud container clusters get-credentials \
 
 ## デプロイワークフロー体験
 
-Duration: 999
+Duration: 16
 
-このセクションでは開発者、QA、管理者になりきって実際のデプロイワークフローを体験します。
+このセクションでは開発者、QA 担当者、管理者になりきって実際のデプロイワークフローを体験します。
 
 ![workflow](./images/workflow.png)
 
@@ -1252,7 +1270,7 @@ QA チームにわかるように Title や Description を入力して **Create
 
 ![new merge request](./images/new-merge-request.png)
 
-この Merge Request が QA チームへの QA テスト依頼兼ステージングデプロイ依頼となります。
+この Merge Request が運用チームへの QA テスト依頼兼ステージングデプロイ依頼となります。
 以上で開発者としての作業は終了です。
 
 ### QA テスト
@@ -1283,7 +1301,7 @@ gcloud container clusters get-credentials stg \
 echo http://$(kubectl get ingress myapp -n myapp --output 'go-template={{(index .status.loadBalancer.ingress 0).ip}}')
 ```
 
-ブラウザでアクセスして次のように表示されていればアプリの正常な動作確認は完了です。
+ブラウザでアクセスして次のように表示されていればアプリの正常な動作確認は完了です。デプロイに数分ほど時間がかかることがあるので、正しく表示されない場合は少し待って試してください。
 
 ![updated myapp](./images/updated-myapp.png)
 
@@ -1312,7 +1330,7 @@ Title、Description を適当に入力して、**Delete source branch when merge
 最後に、本番環境の管理者として作業します。
 本番環境への Merge Request を承認・マージして本番環境へ myapp アプリをデプロイします。
 
-管理者として GitLab の gitops プロジェクトにアクセスしてください。
+GitLab の gitops プロジェクトにアクセスしてください。
 左メニューの **Merge requests** をクリックして、`Target-Branch = prd` で本番環境への Merge Request を検索してください。myapp の Merge Request をクリックしてください。
 
 ![search prd mr](./images/search-prd-mr.png)
@@ -1342,7 +1360,7 @@ echo http://$(kubectl get ingress myapp -n myapp --output 'go-template={{(index 
 
 ## おわりに
 
-Duration: 999
+Duration: 3
 
 以上でこのラボは終了です。おつかれさまでした。
 
@@ -1350,3 +1368,5 @@ Duration: 999
 ラボ用のプロジェクトを作成した場合は、プロジェクトごと削除してください。
 
 **ナビゲーションメニュー** > **IAMと管理** > **設定**
+
+GitLab のプロジェクトやグループも不要な場合は削除してください。
