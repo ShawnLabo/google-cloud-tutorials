@@ -1,0 +1,960 @@
+
+<!doctype html>
+
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, minimum-scale=1.0, initial-scale=1.0, user-scalable=yes">
+  <meta name="theme-color" content="#4F7DC9">
+  <meta charset="UTF-8">
+  <title>Anthos Config Management と GitLab による GitOps パイプラインの構築</title>
+  <link rel="stylesheet" href="//fonts.googleapis.com/css?family=Source+Code+Pro:400|Roboto:400,300,400italic,500,700|Roboto+Mono">
+  <link rel="stylesheet" href="//fonts.googleapis.com/icon?family=Material+Icons">
+  <link rel="stylesheet" href="https://storage.googleapis.com/codelab-elements/codelab-elements.css">
+  <style>
+    .success {
+      color: #1e8e3e;
+    }
+    .error {
+      color: red;
+    }
+  </style>
+</head>
+<body>
+  <google-codelab-analytics gaid="UA-191798031-4"></google-codelab-analytics>
+  <google-codelab codelab-gaid=""
+                  id="config-sync-with-gitlab"
+                  title="Anthos Config Management と GitLab による GitOps パイプラインの構築"
+                  environment="web"
+                  feedback-link="https://github.com/ShawnLabo/google-cloud-tutorials/issues">
+    
+      <google-codelab-step label="はじめに" duration="3">
+        <aside class="warning"><p> このラボは Google Cloud の公式コンテンツではありません。</p>
+</aside>
+<h2 is-upgraded>前提条件</h2>
+<p>ラボを開始する前に以下のものをあらかじめ準備してください。</p>
+<ul>
+<li>Google Cloud アカウント</li>
+<li>ラボ用の Google Cloud プロジェクト <ul>
+<li>有効な<a href="https://cloud.google.com/billing/docs/how-to/modify-project?hl=ja" target="_blank">請求先アカウント</a>に紐付いていることを確認してください</li>
+<li>ラボで作成したリソースをクリーンアップしやすいように新規プロジェクトの利用をおすすめします</li>
+</ul>
+</li>
+<li><a href="https://cloud.google.com/shell" target="_blank">Cloud Shell</a><ul>
+<li>このラボでは Cloud Shell での操作を前提にしています</li>
+<li>Cloud Shell 以外で操作する場合は下記の指示に従ってください</li>
+</ul>
+</li>
+<li><a href="https://gitlab.com" target="_blank">GitLab.com</a> アカウント <ul>
+<li>Cloud Shell 等の操作する端末で<a href="https://docs.gitlab.com/ee/ssh/" target="_blank">SSH 接続の設定</a>をしておいてください</li>
+</ul>
+</li>
+</ul>
+<h2 is-upgraded>Cloud Shell 以外での操作</h2>
+<p>Cloud Shell 以外で操作する場合は次のツールをインストールしてください。</p>
+<ul>
+<li><a href="https://cloud.google.com/sdk" target="_blank">Cloud SDK</a> (<code>gcloud</code> コマンド)</li>
+<li>Git コマンド</li>
+</ul>
+<p>また、ラボで使用する Cloud SDK コンポーネントをインストールしてください。</p>
+<pre>gcloud components install beta kubectl nomos
+</pre>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="このラボについて" duration="3">
+        <p>このラボでは複数の Kubernetes クラスタを GitOps で管理するためのパイプラインを構築します。 マニフェストの YAML を管理するための Git リポジトリとして <a href="https://gitlab.com" target="_blank">GitLab.com</a> を利用します。 また、<a href="https://cloud.google.com/anthos-config-management" target="_blank">Anthos Config Management</a> の <a href="https://cloud.google.com/anthos-config-management/docs/config-sync-overview" target="_blank">Config Sync</a> を使って Git リポジトリで管理されているマニフェストを各クラスタに同期します。</p>
+<p class="image-container"><img alt="gitops" src="img/1445bda8db8e344e.png"></p>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="パイプライン全体像" duration="7">
+        <p>このセクションでは、このラボで構築するパイプラインについて説明します。</p>
+<h2 is-upgraded>全体アーキテクチャ</h2>
+<p>全体のアーキテクチャは次の図のようになります。 各コンポーネントの詳細はそれぞれ構築時に説明します。</p>
+<p class="image-container"><img alt="overview" src="img/e5874e6b84f0627e.png"></p>
+<p>ここでは各コンポーネントについて簡単に説明します。</p>
+<ul>
+<li><a href="https://gitlab.com" target="_blank">GitLab.com</a><ul>
+<li>GitLab 社が提供する Git のホストが可能な DevOps プラットフォームです。</li>
+<li>このラボでは、アプリケーションの管理用に <strong>myapp</strong> プロジェクト、Kubernetes マニフェストの管理用に <strong>gitops</strong> プロジェクトをそれぞれ作成します。</li>
+</ul>
+</li>
+<li><a href="https://cloud.google.com/source-repositories" target="_blank">Cloud Source Repository</a><ul>
+<li>Google Cloud が提供する Git ホスティングサービスです。</li>
+<li>GitLab の Git リポジトリをミラーリングして Google Cloud との連携に利用します。</li>
+</ul>
+</li>
+<li><a href="https://cloud.google.com/build" target="_blank">Cloud Build</a><ul>
+<li>Google Cloud が提供するサーバーレス CI/CD プラットフォームです。</li>
+<li><strong>myapp</strong> プロジェクトが更新されると、最新のコンテナイメージをビルド・プッシュします。さらに、最新のイメージを利用した Kubernetes のマニフェスト YAML を <strong>gitops</strong> リポジトリの新しいブランチにプッシュします。</li>
+</ul>
+</li>
+<li><a href="https://cloud.google.com/artifact-registry" target="_blank">Artifact Registry</a><ul>
+<li>Google Cloud が提供するビルドアーティファクト管理サービスです。</li>
+<li>Cloud Build がビルドしたコンテナイメージを管理します。</li>
+</ul>
+</li>
+<li><a href="https://cloud.google.com/kubernetes-engine" target="_blank">Google Kubernetes Engine</a> (GKE) <ul>
+<li>Google Cloud が提供するマネージド Kubernetes プラットフォームです。</li>
+<li>このラボでは管理対象のクラスタを 3 つ作成します。そのうち 2 つは本番環境用クラスタで <strong>gitops</strong> プロジェクトの <code>prd</code> ブランチと同期します。残りの 1 つは開発環境用クラスタで <strong>gitops</strong> プロジェクトの <code>stg</code> ブランチと同期します。</li>
+</ul>
+</li>
+<li><a href="https://cloud.google.com/anthos/config-management" target="_blank">Anthos Config Management</a> (ACM) <ul>
+<li>Google Cloud が提供する、1 つ以上の Kubernetes クラスタの構成とポリシーを一元管理するためのサービスです。</li>
+</ul>
+</li>
+<li><a href="https://cloud.google.com/anthos-config-management/docs/config-sync-overview" target="_blank">Config Sync</a><ul>
+<li>ACM の主要コンポーネントの 1 つです。Config Sync を利用すると、Kubernetes クラスタの構成やポリシーを Git リポジトリで一元管理できます。</li>
+</ul>
+</li>
+</ul>
+<h2 is-upgraded>デプロイ ワークフロー</h2>
+<p>上記アーキテクチャにおいて、開発・テスト・デプロイをどのようなワークフローで実現するかを説明します。 次の図では、<strong>myapp</strong> というアプリの開発からデプロイまでのワークフローを表しています。</p>
+<p class="image-container"><img alt="workflow" src="img/4bd538df6b269d28.png"></p>
+<p>このラボでは開発チームと運用チームという 2 つのチームを想定しています。開発チームは <strong>myapp</strong> アプリケーションの開発を担当し、運用チームは品質保証 (QA) テストを実施したり本番環境を変更したりします。</p>
+<aside class="special"><p> このラボでは簡単にするためチームを 2 つにしましたが、開発チーム、品質保証チーム、運用チームと 3 つに分かれていてもこのワークフローは機能します。</p>
+</aside>
+<p>ワークフローの流れはこのようになります。</p>
+<ol type="1">
+<li>開発チームは <strong>myapp</strong> プロジェクトで開発する</li>
+<li>開発者はデプロイしたいとき、<strong>myapp</strong> プロジェクトの <code>main</code> ブランチを更新する</li>
+<li><strong>myapp</strong> プロジェクトの <code>main</code> ブランチが更新されたとき、Cloud Build により <strong>gitops</strong> プロジェクトに新しいブランチがプッシュされる。そのブランチには最新の Kubernetes マニフェストが含まれる。</li>
+<li>開発者は <strong>gitops</strong> プロジェクトで自動生成されたブランチから <code>stg</code> ブランチに対する Merge Request を作成して運用チームに QA (品質保証) テストを依頼する</li>
+<li>QA 担当者はステージング環境の準備ができていれば Merge Request を承認してマージする</li>
+<li>Config Sync により <code>stg</code> ブランチのマニフェストがステージング環境の Kubernetes クラスタに同期される</li>
+<li>QA 担当者はステージング環境で品質保証テストを実施して、OK であれば <code>prd</code> ブランチに対して Merge Request を作成する</li>
+<li>管理者は Merge Request を確認し、本番環境への適用が認められた場合に承認してマージする</li>
+<li>Config Sync により <code>prd</code> ブランチのマニフェストが本番環境の Kubernetes クラスタに同期される</li>
+</ol>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="Google Cloud の準備" duration="3">
+        <p>Cloud Shell を開いてください。</p>
+<p>使用するプロジェクトを設定してください。</p>
+<pre>gcloud config set project YOUR-PROJECT-ID
+</pre>
+<p>利用するサービスの API を有効化してください。</p>
+<pre>gcloud services enable \
+  anthos.googleapis.com \
+  artifactregistry.googleapis.com \
+  cloudbuild.googleapis.com \
+  container.googleapis.com \
+  gkehub.googleapis.com \
+  secretmanager.googleapis.com \
+  sourcerepo.googleapis.com
+</pre>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="Git リポジトリの準備" duration="10">
+        <p>このセクションでは GitLab.com で <strong>myapp</strong> プロジェクトと <strong>gitops</strong> プロジェクトを作成します。 また、Cloud Source Repositories でも 2 つの Git リポジトリを作成して、GitLab とのミラーリングを設定します。</p>
+<p class="image-container"><img alt="instruction git" src="img/7067b57f4b8eae35.png"></p>
+<h2 is-upgraded>GitLab Group の作成</h2>
+<p>このラボ用の GitLab Group を作成します。</p>
+<p><a href="https://gitlab.com/groups/new#create-group-pane" target="_blank">こちら</a>にアクセスしてください。 適当な Group name を入力して<strong>Create group</strong>をクリックして、Group を作成してください。</p>
+<p class="image-container"><img alt="create group" src="img/e8c4454d70977d07.png"></p>
+<p>Group URL に設定した値を環境変数に設定してください。Group の URL としても利用されている ID です。</p>
+<p class="image-container"><img alt="group id" src="img/fa00eb6d9b2a95b5.png"></p>
+<pre>export GITLAB_GROUP=&#34;your-group&#34;
+</pre>
+<h2 is-upgraded>GitLab Project の作成</h2>
+<p>作成した Group に Project を 2 つ作成します。</p>
+<p><strong>New Project</strong> をクリックしてください。</p>
+<p class="image-container"><img alt="new project button" src="img/b887765425b84eea.png"></p>
+<p><strong>Create blank project</strong> をクリックしてください。</p>
+<p class="image-container"><img alt="create blank project" src="img/677baed271594e0f.png"></p>
+<p>Project name と Project slug に <code>myapp</code> と入力して <strong>Create Project</strong> ボタンをクリックしてください。</p>
+<p class="image-container"><img alt="create project" src="img/825907fba47c0585.png"></p>
+<p>同様にして <code>gitops</code> Project を作成してください。</p>
+<h2 is-upgraded>Cloud Source Repositories の作成</h2>
+<p>Cloud Source Repositories で <code>myapp</code> と <code>gitops</code> リポジトリを作成して、GitLab からのミラーリングを設定するための認証情報を取得します。</p>
+<p><code>myapp</code> リポジトリと <code>gitops</code> リポジトリを作成してください。</p>
+<pre>gcloud source repos create myapp
+gcloud source repos create gitops
+</pre>
+<p><a href="https://source.cloud.google.com/repos?hl=ja" target="_blank">Cloud Source Repositories</a>にアクセスしてください。</p>
+<p>作成した <code>myapp</code> をクリックしてください。</p>
+<p class="image-container"><img alt="source repos" src="img/a10eda0cced75ba9.png"></p>
+<p><strong>手動で生成した認証情報</strong>タブの**Git 認証情報を生成して保存します。**をクリックしてください。</p>
+<p class="image-container"><img alt="create credentials" src="img/812ecfade634ccc2.png"></p>
+<p>Google Cloud で利用しているアカウントを選択して、Google Cloud Development からの権限リクエストを許可してください。 <strong>Configure Git</strong>というページが表示されます。ハイライトされた部分をコピーしてください。</p>
+<p class="image-container"><img alt="configure git" src="img/343c8538f31792d8.png"></p>
+<p>コピーした内容を Cloud Shell にペーストして実行してください。</p>
+<p>以下のコマンドを実行してください。最後に表示される URL と Password を GitLab で利用します。</p>
+<pre>csr_pass=$(grep &#39;source.developers.google.com&#39; ~/.gitcookies | tail -1 | cut -d= -f2)
+csr_user=$(grep &#39;source.developers.google.com&#39; ~/.gitcookies | tail -1 | \
+    cut -d$&#39;\t&#39; -f7 | cut -d= -f1)
+myapp_repo=$(gcloud source repos describe myapp --format=&#34;value(url)&#34;)
+gitops_repo=$(gcloud source repos describe gitops --format=&#34;value(url)&#34;)
+cat &lt;&lt;EOF
+
+======== Mirroring Credentials for myapp ========
+
+URL: $(echo $myapp_repo | sed &#34;s/:\/\//:\/\/${csr_user}@/&#34;)
+Password: $csr_pass
+
+======== Mirroring Credentials for gitops =======
+
+URL: $(echo $gitops_repo | sed &#34;s/:\/\//:\/\/${csr_user}@/&#34;)
+Password: $csr_pass
+
+=================================================
+EOF
+</pre>
+<h2 is-upgraded>ミラーリングの設定</h2>
+<p>GitLab のリポジトリから Cloud Source Repositories のリポジトリへのミラーリングを設定します。</p>
+<p>GitLab の <code>myapp</code> リポジトリのメニューから <strong>Settings</strong> をクリックして <strong>Repository</strong> をクリックしてください。</p>
+<p class="image-container"><img alt="settings repository" src="img/c54d162f9b25effd.png"></p>
+<p><strong>Mirroring repositories</strong> セクションの <strong>Expand</strong> ボタンをクリックしてください。 Cloud Shell で表示された <code>myapp</code> の URL と Password を入力して <strong>Mirror repository</strong> ボタンをクリックしてください。</p>
+<p class="image-container"><img alt="mirroring repositories" src="img/a82a002bb0b99934.png"></p>
+<p>同様に <code>gitops</code> リポジトリもミラーリングを設定してください。</p>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="コンテナイメージのビルド" duration="12">
+        <p>このセクションでは Cloud Build を使ってコンテナイメージのビルド・プッシュを自動化します。 また、コンテナとしてデプロイするアプリケーションを作成して <code>myapp</code> リポジトリにコミットします。</p>
+<p class="image-container"><img alt="build image" src="img/12cf7ec905ece947.png"></p>
+<aside class="warning"><p> Cloud Shell から GitLab への SSH 接続をまだ設定していない場合は設定してください。 <a href="https://docs.gitlab.com/ee/ssh/" target="_blank">GitLab and SSH Keys</a></p>
+</aside>
+<h2 is-upgraded>アプリケーションの実装</h2>
+<p>myapp アプリを実装してコミットします。</p>
+<p>環境変数 <code>GITLAB_GROUP</code> に作成した GitLab の Group 名が格納されていることを確認してください。</p>
+<pre>echo $GITLAB_GROUP
+</pre>
+<p>GitLab の <code>myapp</code> リポジトリを Cloud Shell にクローンしてください。</p>
+<pre>git clone ssh://git@gitlab.com/$GITLAB_GROUP/myapp ~/workshop/gitops/myapp
+cd ~/workshop/gitops/myapp
+</pre>
+<p>次のコマンドで Cloud Shell Editor を開いてください。</p>
+<pre>cloudshell workspace .
+</pre>
+<p><strong>File</strong> メニューの <strong>New File</strong> をクリックしてください。</p>
+<p class="image-container"><img alt="new file" src="img/55886ed287ff7fb6.png"></p>
+<p><code>main.py</code> と入力して <strong>OK</strong> をクリックしてください。</p>
+<p class="image-container"><img alt="new filename" src="img/a3b7acd2ba152216.png"></p>
+<p>次のソースコードをコピーして Cloud Shell Editor で <code>main.py</code> にペーストしてください。</p>
+<pre>from flask import Flask
+
+app = Flask(__name__)
+
+@app.route(&#39;/&#39;)
+def home():
+    return &#39;&lt;h1&gt;Hello, world!&lt;/h1&gt;&#39;
+
+if __name__ == &#39;__main__&#39;:
+    app.run(debug=False, host=&#39;0.0.0.0&#39;, port=&#39;5000&#39;)
+</pre>
+<aside class="special"><p> Cloud Shell Editor では変更が自動で保存されます。</p>
+</aside>
+<p>同様にして、<code>Dockerfile</code> というファイルを作成してください。 次のコードをコピーして <code>Dockerfile</code> にペーストしてください。</p>
+<pre>FROM python:3-slim-buster
+
+RUN pip install --no-cache-dir flask
+
+COPY main.py /main.py
+
+CMD [&#34;python&#34;, &#34;/main.py&#34;]
+</pre>
+<p>Cloud Shell 上で動作確認を行います。 右上の<strong>ターミナルを開く</strong> ボタンをクリックしてください。</p>
+<p>Docker イメージをビルドしてください。</p>
+<pre>docker build -t myapp .
+</pre>
+<p>ビルドしたイメージを元にコンテナを実行してください。</p>
+<pre>docker run -d --rm -p 5000:5000 --name myapp myapp
+</pre>
+<p>実行したコンテナにリクエストしてください。 正常なレスポンスが返ってきたら成功です。</p>
+<pre>curl localhost:5000
+</pre>
+<p>動作確認ができたので、コンテナを終了してください。</p>
+<pre>docker kill myapp
+</pre>
+<p>ここまでの変更をコミットしてください。</p>
+<pre>git checkout -b main
+git add .
+git commit -m &#34;Implement myapp application&#34;
+</pre>
+<h2 is-upgraded>Artifact Registry の準備</h2>
+<p>myapp アプリケーションのコンテナイメージを管理するための Artifact Registry のリポジトリを作成します。</p>
+<p>次のコマンドで作成してください。</p>
+<pre>gcloud artifacts repositories create myapp \
+  --repository-format docker \
+  --location asia-northeast1
+</pre>
+<h2 is-upgraded>Cloud Build の設定</h2>
+<p>myapp の Git リポジトリに変更があったとき、myapp アプリケーションの Docker イメージをビルドして Artifact Registry にプッシュするように Cloud Build を設定します。</p>
+<p>Cloud Build にトリガーを作成してください。</p>
+<pre>gcloud beta builds triggers create cloud-source-repositories \
+  --name myapp-trigger \
+  --repo myapp \
+  --branch-pattern main \
+  --build-config cloudbuild.yaml
+</pre>
+<p><code>main</code> ブランチに変更があると <code>cloudbuild.yaml</code> に従ってビルドを実行するトリガーが作成されました。</p>
+<p>次のコマンドで <code>cloudbuild.yaml</code> を作成してください。</p>
+<pre>cat &lt;&lt;&#39;EOF&#39; &gt; ~/workshop/gitops/myapp/cloudbuild.yaml
+steps:
+  - name: &#39;gcr.io/cloud-builders/docker&#39;
+    args: [
+      &#39;build&#39;,
+      &#39;-t&#39;, &#39;asia-northeast1-docker.pkg.dev/$PROJECT_ID/myapp/myapp:$COMMIT_SHA&#39;,
+      &#39;.&#39;
+    ]
+
+images:
+  - &#39;asia-northeast1-docker.pkg.dev/$PROJECT_ID/myapp/myapp:$COMMIT_SHA&#39;
+EOF
+</pre>
+<aside class="special"><p> ビルド構成ファイルの詳細については<a href="https://cloud.google.com/build/docs/build-config" target="_blank">ドキュメント</a>を参照してください。</p>
+</aside>
+<p>変更をコミットしてプッシュしてください。</p>
+<pre>git add .
+git commit -m &#34;Add cloudbuild.yaml&#34;
+git push -u origin main
+</pre>
+<h2 is-upgraded>確認</h2>
+<p>myapp アプリケーションのコンテナイメージが Cloud Build でビルドされて Artifact Registry にプッシュされているかを確認します。</p>
+<p>次のコマンドを実行してください。</p>
+<pre>gcloud artifacts docker images list \
+  asia-northeast1-docker.pkg.dev/$(gcloud config get-value project)/myapp/myapp
+</pre>
+<aside class="warning"><p> GitLab.com の<a href="https://docs.gitlab.com/ee/user/project/repository/mirror/" target="_blank">ミラーリング機能</a>は 5 分に 1 回以下という制限があるため、ビルドが完了するまでに時間がかかる場合があります。</p>
+</aside>
+<p>次のように表示されれば myapp アプリケーションのコンテナイメージをビルドするパイプラインは正常に動作しています。</p>
+<pre>IMAGE: asia-northeast1-docker.pkg.dev/shawn-gitops/myapp/myapp
+DIGEST: sha256:680adf0512b424c0c8d34ed006fdf34f9bd1786605b450ed4fe797eccde9b996
+CREATE_TIME: 2021-10-19T07:52:05
+UPDATE_TIME: 2021-10-19T07:52:05
+</pre>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="GKE クラスタの作成と設定" duration="20">
+        <p>このセクションでは 3 つの Google Kubernetes Engine クラスタを作成して Config Sync を設定します。</p>
+<p class="image-container"><img alt="create and configure clusters" src="img/2f20fb769c7967dd.png"></p>
+<h2 is-upgraded>GKE クラスタの作成</h2>
+<p>3 つの GKE クラスタを作成します。</p>
+<p>東京リージョンの本番用クラスタ <code>prd-asia-northeast1</code> を作成してください。</p>
+<pre>gcloud container clusters create prd-asia-northeast1 \
+  --enable-ip-alias \
+  --machine-type e2-standard-2 \
+  --num-nodes 1 \
+  --workload-pool=$(gcloud config get-value project).svc.id.goog \
+  --region asia-northeast1
+</pre>
+<p>アイオワリージョンの本番用クラスタ <code>prd-us-central1</code> を作成してください。</p>
+<pre>gcloud container clusters create prd-us-central1 \
+  --enable-ip-alias \
+  --machine-type e2-standard-2 \
+  --num-nodes 1 \
+  --workload-pool=$(gcloud config get-value project).svc.id.goog \
+  --region us-central1
+</pre>
+<p>東京リージョンのステージング用クラスタ <code>stg</code> を作成してください。</p>
+<pre>gcloud container clusters create stg \
+  --enable-ip-alias \
+  --machine-type e2-standard-2 \
+  --num-nodes 1 \
+  --workload-pool=$(gcloud config get-value project).svc.id.goog \
+  --region asia-northeast1
+</pre>
+<h2 is-upgraded>クラスタのフリートへの登録</h2>
+<p>作成したクラスタをフリートへ登録します。フリートへ登録することで Anthos Config Management が利用できるようになります。</p>
+<aside class="special"><p><a href="https://cloud.google.com/anthos/multicluster-management" target="_blank">フリート</a>は Anthos において複数の Kubernetes クラスタを管理するための論理グループです。</p>
+</aside>
+<p>次のコマンドで 3 つのクラスタをフリートへ登録してください。</p>
+<pre>gcloud beta container hub memberships register prd-asia-northeast1 \
+  --gke-cluster asia-northeast1/prd-asia-northeast1 \
+  --enable-workload-identity
+gcloud beta container hub memberships register prd-us-central1 \
+  --gke-cluster us-central1/prd-us-central1 \
+  --enable-workload-identity
+gcloud beta container hub memberships register stg \
+  --gke-cluster asia-northeast1/stg \
+  --enable-workload-identity
+</pre>
+<h2 is-upgraded>Anthos Config Management の有効化</h2>
+<p>Anthos Config Management (ACM) を有効化して、Cloud Source Repositories の Git リポジトリにアクセスするための Service Account を設定します。</p>
+<p>Anthos Config Management を有効化してください。</p>
+<pre>gcloud beta container hub config-management enable
+</pre>
+<p>Cloud Source Repositories へアクセスするための Service Account を作成します。 ACM の Kubernetes Service Account とは Workload Identity によってこの Google Service Account と紐付けます。</p>
+<pre>gcloud iam service-accounts create acm-root-reconciler
+</pre>
+<aside class="special"><p><a href="https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity" target="_blank">Workload Identity</a>では Kubernetes の Service Account と Google Cloud の Service Account を関連付けて、GKE 内で実行されているアプリケーションの Google Cloud サービスへのアクセス権限を管理することができます。</p>
+</aside>
+<p>作成した Service Account に Cloud Source Repository の読み取り権限を付与します。</p>
+<pre>gcloud projects add-iam-policy-binding \
+  $(gcloud config get-value project) \
+  --member serviceAccount:acm-root-reconciler@$(gcloud config get-value project).iam.gserviceaccount.com \
+  --role roles/source.reader
+</pre>
+<p>ACM の Kubernetes Service Account (<code>config-management-system/root-reconciler</code>)に作成した Google Service Account を Workload Identity で利用する権限を付与します。</p>
+<pre>gcloud iam service-accounts add-iam-policy-binding \
+    acm-root-reconciler@$(gcloud config get-value project).iam.gserviceaccount.com \
+    --member &#34;serviceAccount:$(gcloud config get-value project).svc.id.goog[config-management-system/root-reconciler]&#34; \
+    --role roles/iam.workloadIdentityUser
+</pre>
+<h2 is-upgraded>Config Sync の設定</h2>
+<p>本番環境、ステージング環境それぞれに Config Sync を設定します。</p>
+<aside class="warning"><p> この段階ではまだ同期元の Git リポジトリが空なので何も同期されません。</p>
+</aside>
+<p>このラボでは設定ファイルを<code>gitops</code>リポジトリで管理します。 <code>gitops</code>リポジトリをクローンしてください。</p>
+<pre>git clone ssh://git@gitlab.com/$GITLAB_GROUP/gitops ~/workshop/gitops/gitops
+cd ~/workshop/gitops/gitops
+</pre>
+<p>本番環境用の ACM 設定ファイルを作成してください。</p>
+<pre>cat &lt;&lt;EOF &gt; prd-apply-spec.yaml
+applySpecVersion: 1
+spec:
+  configSync:
+    enabled: true
+    syncRepo: https://source.developers.google.com/p/$(gcloud config get-value project)/r/gitops
+    syncBranch: prd
+    secretType: gcpserviceaccount
+    gcpServiceAccountEmail: acm-root-reconciler@$(gcloud config get-value project).iam.gserviceaccount.com
+EOF
+</pre>
+<p>ステージング環境用の ACM 設定ファイルを作成してください。</p>
+<pre>cat &lt;&lt;EOF &gt; stg-apply-spec.yaml
+applySpecVersion: 1
+spec:
+  configSync:
+    enabled: true
+    syncRepo: https://source.developers.google.com/p/$(gcloud config get-value project)/r/gitops
+    syncBranch: stg
+    secretType: gcpserviceaccount
+    gcpServiceAccountEmail: acm-root-reconciler@$(gcloud config get-value project).iam.gserviceaccount.com
+EOF
+</pre>
+<p>本番環境の GKE クラスタ 2 つに ACM の設定を適用してください。</p>
+<pre>gcloud beta container hub config-management apply \
+  --membership prd-asia-northeast1 \
+  --config prd-apply-spec.yaml
+gcloud beta container hub config-management apply \
+  --membership prd-us-central1 \
+  --config prd-apply-spec.yaml
+</pre>
+<p>ステージング環境の GKE クラスタに ACM の設定を適用してください。</p>
+<pre>gcloud beta container hub config-management apply \
+  --membership stg \
+  --config stg-apply-spec.yaml
+</pre>
+<p>ここまでの変更をコミットしておきます。</p>
+<pre>git checkout -b main
+git add .
+git commit -m &#34;Configure ACM&#34;
+git push -u origin main
+</pre>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="Namespace の作成" duration="10">
+        <p>このセクションでは myapp アプリケーションのデプロイ先となる Kubernetes の Namespace <code>myapp</code> の YAML ファイルを作成します。 また、そのファイルを <code>gitops</code> リポジトリに <code>stg</code> ブランチとしてプッシュして、Config Sync でクラスタに同期します。</p>
+<p class="image-container"><img alt="create namespace" src="img/6192ecc9e5f12a12.png"></p>
+<h2 is-upgraded>Config Sync 構成の初期化</h2>
+<p>このラボでは Config Sync の<a href="https://cloud.google.com/anthos-config-management/docs/concepts/hierarchical-repo" target="_blank">階層リポジトリ</a>を使ってマニフェストファイルを管理します。</p>
+<p><code>gitops</code> リポジトリを次のコマンドで初期化してください。</p>
+<pre>cd ~/workshop/gitops/gitops
+nomos init --force
+</pre>
+<p>次のようなファイルとディレクトリが作成されます。</p>
+<pre>$ tree
+.
+├── cluster
+├── clusterregistry
+├── namespaces
+├── prd-apply-spec.yaml
+├── README.md
+├── stg-apply-spec.yaml
+└── system
+    ├── README.md
+    └── repo.yaml
+
+4 directories, 5 files
+</pre>
+<aside class="special"><p> Cloud Shell で <code>tree</code> コマンドは <code>sudo apt install tree</code> でインストールできます。</p>
+</aside>
+<p>この変更をコミットしてください。</p>
+<pre>git add .
+git commit -m &#34;nomos init&#34;
+</pre>
+<h2 is-upgraded>namespace マニフェストの作成</h2>
+<p><code>myapp</code> Namespace のマニフェストファイルを作成してコミットします。</p>
+<p><code>myapp</code> Namespace 用のディレクトリを作成してください。今後、<code>myapp</code> Namespace に属するリソースのマニフェストはこのディレクトリへ格納することになります。</p>
+<pre>mkdir -p namespaces/myapp
+</pre>
+<p>Namespace の YAML を作成してください。</p>
+<pre>cat &lt;&lt;EOF &gt; namespaces/myapp/namespace.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: myapp
+EOF
+</pre>
+<p>コミットしてプッシュしてください。</p>
+<pre>git add .
+git commit -m &#34;Create myapp Namespace&#34;
+git push
+</pre>
+<h2 is-upgraded>stg ブランチの作成</h2>
+<p>現段階では <code>gitops</code> リポジトリに <code>main</code> ブランチしかないため GKE クラスタには同期されません。 ステージング環境用クラスタの Config Sync 同期元である <code>stg</code> ブランチを作成して、<code>myapp</code> Namespace が作成されることを確認します。</p>
+<p>まず現在の Config Sync の状態を確認してください。</p>
+<pre>gcloud beta container hub config-management status
+</pre>
+<p>3 つのクラスタすべて <code>Status: ERROR</code> または <code>Status: PENDING</code> となっています。 エラーメッセージには、次のように同期元の Git ブランチがないという記述があります。</p>
+<pre>fatal: Remote branch prd not found in upstream origin
+</pre>
+<p><code>stg</code>ブランチを作成してプッシュします。</p>
+<pre>git branch -c stg
+git push origin stg
+</pre>
+<p>Config Sync の状態を確認してください。</p>
+<pre>gcloud beta container hub config-management status
+</pre>
+<p><code>stg</code> クラスタが <code>Status: SYNCED</code> となっていれば、<code>stg</code> ブランチとの同期が成功しています。</p>
+<aside class="warning"><p> GitLab.com の<a href="https://docs.gitlab.com/ee/user/project/repository/mirror/" target="_blank">ミラーリング機能</a>は 5 分に 1 回以下という制限があるため、同期に時間がかかる場合があります。</p>
+</aside>
+<p>実際に<code>myapp</code> Namespace が作成されているか確認してください。</p>
+<pre>gcloud container clusters get-credentials stg \
+  --region asia-northeast1
+kubectl describe namespace myapp
+</pre>
+<p>このとき、Label や Annotation に Config Management のプロパティが含まれていることも確認してください。 例えば、<code>app.kubernetes.io/managed-by=configmanagement.gke.io</code>というラベルを見ることで Config Management によって管理されているリソースであることを確認できます。</p>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="マニフェストの CI/CD" duration="10">
+        <p>このセクションでは myapp アプリケーションの CI/CD を実現するために、<code>myapp</code>リポジトリの変更を反映したマニフェストファイルを自動で<code>gitops</code>リポジトリにプッシュするパイプラインを構築します。</p>
+<p class="image-container"><img alt="manifest cicd" src="img/d9555c8ee63ddb65.png"></p>
+<p>パイプラインの流れは次のようになります。</p>
+<ul>
+<li><code>myapp</code> リポジトリの <code>main</code> ブランチが更新される</li>
+<li>(Cloud Source Repositories へミラーリングされる)</li>
+<li>Cloud Build がトリガーされる</li>
+<li>Cloud Build は以下のタスクを実行する <ul>
+<li>最新の<code>myapp</code>リポジトリの<code>main</code>ブランチを使用してコンテナイメージをビルド・プッシュする</li>
+<li>ビルドされた最新のコンテナイメージを利用した Deployment の YAML ファイルを生成する</li>
+<li>生成した YAML ファイルを <code>myapp-$COMMIT_SHA</code> という新しいブランチで <code>gitops</code> リポジトリにプッシュする</li>
+</ul>
+</li>
+</ul>
+<h2 is-upgraded>デプロイキーを作成する</h2>
+<p>このラボでは Cloud Build から GitLab へアクセスするために<a href="https://docs.gitlab.com/ee/user/project/deploy_keys/index.html" target="_blank">デプロイキー</a>を利用します。 また、Cloud Build から安全に秘密鍵を扱うために<a href="https://cloud.google.com/secret-manager" target="_blank">Secret Manager</a>を利用します。</p>
+<p>デプロイキーを作成してください。</p>
+<pre>ssh-keygen -t ed25519 -N &#39;&#39; -f ~/workshop/gitops/deploy_key
+</pre>
+<p>作成した秘密鍵を Secret Manager に登録してください。</p>
+<pre>cat ~/workshop/gitops/deploy_key | gcloud secrets create deploy-key --data-file=-
+</pre>
+<aside class="special"><p> 通常の利用時には流出防止のため Secret Manager に保存した後にローカルの秘密鍵は削除しておくことをおすすめします。</p>
+</aside>
+<p>Cloud Build が Secret Manager から秘密鍵を取得できるように権限を付与してください。</p>
+<pre>gcloud secrets add-iam-policy-binding \
+  deploy-key \
+  --member serviceAccount:$(gcloud projects describe $(gcloud config get-value project) --format &#39;value(projectNumber)&#39;)@cloudbuild.gserviceaccount.com \
+  --role roles/secretmanager.secretAccessor
+</pre>
+<aside class="special"><p> Cloud Build におけるデプロイキーの利用は<a href="https://cloud.google.com/build/docs/access-private-github-repos" target="_blank">こちらのドキュメント</a>も参考にしてください。</p>
+</aside>
+<h2 is-upgraded>GitLab へのデプロイキーの設定</h2>
+<p>GitLab の <code>gitops</code> リポジトリに作成したデプロイキーの公開鍵を登録します。 これにより、Cloud Build から <code>gitops</code> リポジトリへアクセスできるようになります。</p>
+<p>作成した公開鍵の内容を表示してコピーしてください。</p>
+<pre>cat ~/workshop/gitops/deploy_key.pub
+</pre>
+<p>GitLab の <code>gitops</code> プロジェクトを開いてください。 左のメニューから <strong>Settings</strong> の <strong>Repository</strong> を開いてください。</p>
+<p class="image-container"><img alt="gitops settings repository" src="img/329c6eba585fb577.png"></p>
+<p><strong>Deploy keys</strong> を開き、<strong>Key</strong> にコピーした公開鍵をペーストしてください。 <strong>Grant write permissions to this key</strong> にチェックを入れて <strong>Add key</strong> をクリックしてください。</p>
+<p class="image-container"><img alt="deploy key" src="img/503eec5a88fb926.png"></p>
+<h2 is-upgraded>myapp マニフェスト作成</h2>
+<p>myapp アプリを Kubernetes 上にデプロイするためのマニフェスト YAML を用意します。 このラボでは GKE 上でアプリケーションを公開するために Deployment、Service、Ingress のリソースを作成します。 Namespace は前のセクションで準備した <code>myapp</code> Namespace を利用します。</p>
+<p>Deployment にはコンテナイメージを変数としたテンプレートを用意します。 Cloud Build では <code>myapp</code> リポジトリが更新されると最新コミットを元にイメージをビルド・プッシュして、そのイメージタグをテンプレートに埋め込んだ YAML を <code>gitops</code> リポジトリへコミットすることになります。</p>
+<p><code>myapp</code> リポジトリに移動してください。</p>
+<pre>cd ~/workshop/gitops/myapp
+</pre>
+<p><code>kubernetes</code> ディレクトリを作成してください。</p>
+<pre>mkdir ~/workshop/gitops/myapp/kubernetes
+</pre>
+<p>Deployment の元になるテンプレートを作成してください。</p>
+<pre>cat &lt;&lt;&#39;EOF&#39; &gt; ~/workshop/gitops/myapp/kubernetes/deployment.yaml.tpl
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: myapp
+  name: myapp
+  labels:
+    app: myapp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: myapp
+  template:
+    metadata:
+      labels:
+        app: myapp
+    spec:
+      containers:
+      - name: myapp
+        image: $IMAGE_TAG
+        ports:
+        - containerPort: 5000
+EOF
+</pre>
+<p>下から 3 行目の <code>image: $IMAGE_TAG</code> がコンテナイメージの変数になります。</p>
+<p>Service の YAML を作成してください。</p>
+<pre>cat &lt;&lt;EOF &gt; ~/workshop/gitops/myapp/kubernetes/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: myapp
+  name: myapp
+spec:
+  type: ClusterIP
+  selector:
+    app: myapp
+  ports:
+  - protocol: TCP
+    port: 5000
+    targetPort: 5000
+EOF
+</pre>
+<p>Ingress の YAML を作成してください。</p>
+<pre>cat &lt;&lt;EOF &gt; ~/workshop/gitops/myapp/kubernetes/ingress.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  namespace: myapp
+  name: myapp
+spec:
+  defaultBackend:
+    service:
+      name: myapp
+      port:
+        number: 5000
+EOF
+</pre>
+<h2 is-upgraded>Cloud Build の設定</h2>
+<p>マニフェスト YAML を <code>gitops</code> リポジトリにコミットするスクリプトを作成して、Cloud Build でそのスクリプトを実行するように設定します。</p>
+<p>GitLab Group が変数に格納されていることを確認してください。</p>
+<pre>echo $GITLAB_GROUP
+</pre>
+<p>次のコマンドでスクリプトを作成してください。</p>
+<pre>cat &lt;&lt;EOF &gt; ~/workshop/gitops/myapp/deploy.sh
+#!/bin/bash
+
+gitlab_group=$GITLAB_GROUP
+
+EOF
+cat &lt;&lt;&#39;EOF&#39; &gt;&gt; ~/workshop/gitops/myapp/deploy.sh
+app_repo=&#34;gitlab.com/${gitlab_group}/myapp&#34;
+ops_repo=&#34;gitlab.com/${gitlab_group}/gitops&#34;
+
+image_tag=&#34;asia-northeast1-docker.pkg.dev/${PROJECT_ID}/myapp/myapp:${COMMIT_SHA}&#34;
+
+branch=&#34;myapp-${COMMIT_SHA}&#34;
+commit_url=&#34;https://${app_repo}/-/commit/${COMMIT_SHA}&#34;
+
+# マニフェスト テンプレートをレンダリングするために envsubst をインストール
+
+apt-get update
+apt-get install --no-install-recommends -y gettext-base
+
+# gitops リポジトリにアクセスするために必要なSSHの設定
+# Secret Managerから取得したデプロイキーの秘密鍵は Cloud Build の設定で
+# MANIFEST_DEPLOY_KEY 変数に格納される
+
+mkdir /root/.ssh
+echo &#34;${MANIFEST_DEPLOY_KEY}&#34; &gt; /root/.ssh/id_ed25519
+
+cat &lt;&lt;CONFIG &gt; /root/.ssh/config
+HOST *
+  StrictHostKeyChecking no
+  UserKnownHostsFile=/dev/null
+CONFIG
+
+chmod 400 /root/.ssh/{id_ed25519,config}
+chmod 700 /root/.ssh
+
+# gitops リポジトリを gitops ディレクトリにクローン
+
+git clone ssh://git@${ops_repo} gitops
+
+# マニフェスト YAML を gitops リポジトリの namespaces/myapp ディレクトリにコピー
+
+for f in $(ls kubernetes/*.yaml); do
+  cp $f gitops/namespaces/myapp/
+done
+
+# マニフェスト テンプレートをレンダリングして
+# gitops リポジトリの namespaces/myapp ディレクトリに格納
+
+export IMAGE_TAG=&#34;${image_tag}&#34;
+
+for f in $(ls kubernetes/*.yaml.tpl); do
+  &lt; $f envsubst &gt; gitops/namespaces/myapp/$(basename ${f%.tpl})
+done
+
+# マニフェストをコミットして新しいブランチとしてプッシュ
+
+cd gitops
+git config user.name &#34;Cloud Build&#34;
+git config user.email &#34;cloudbuild@example.com&#34;
+git checkout -b ${branch}
+git add .
+git commit -m &#34;Auto commit by Cloud Build from ${commit_url}&#34;
+git push origin ${branch}
+EOF
+</pre>
+<p>次のコマンドでスクリプトを表示してスクリプトの内容を確認してください。</p>
+<pre>cat ~/workshop/gitops/myapp/deploy.sh
+</pre>
+<aside class="special"><p> Secret Manager から取得したデプロイキーを使って SSH を設定していたり、<code>envsubst</code> コマンドで Deployment のテンプレートに最新のイメージタグを埋め込んでいたりすることを確認してください。</p>
+</aside>
+<p>作成したスクリプトを実行するように <code>cloudbuild.yaml</code> を修正してください。</p>
+<pre>cat &lt;&lt;&#39;EOF&#39; &gt; ~/workshop/gitops/myapp/cloudbuild.yaml
+steps:
+  - name: &#39;gcr.io/cloud-builders/docker&#39;
+    args: [
+      &#39;build&#39;,
+      &#39;-t&#39;, &#39;asia-northeast1-docker.pkg.dev/$PROJECT_ID/myapp/myapp:$COMMIT_SHA&#39;,
+      &#39;.&#39;
+    ]
+  - name: &#39;gcr.io/cloud-builders/git&#39;
+    entrypoint: &#39;bash&#39;
+    args: [&#39;./deploy.sh&#39;]
+    env:
+      - &#39;PROJECT_ID=$PROJECT_ID&#39;
+      - &#39;COMMIT_SHA=$COMMIT_SHA&#39;
+    secretEnv:
+      - &#39;MANIFEST_DEPLOY_KEY&#39;
+
+images:
+  - &#39;asia-northeast1-docker.pkg.dev/$PROJECT_ID/myapp/myapp:$COMMIT_SHA&#39;
+
+availableSecrets:
+  secretManager:
+    - versionName: projects/$PROJECT_ID/secrets/deploy-key/versions/latest
+      env: &#39;MANIFEST_DEPLOY_KEY&#39;
+EOF
+</pre>
+<h2 is-upgraded>変更をコミット</h2>
+<p>これまでの変更を <code>myapp</code> リポジトリにコミットしてください。</p>
+<pre>cd ~/workshop/gitops/myapp
+git add .
+git commit -m &#34;Add deploy script&#34;
+git push
+</pre>
+<p>このコミットにより、新しい Cloud Build のパイプラインが実行され、GitLab の <code>gitops</code> リポジトリに新しいブランチがプッシュされます。</p>
+<p>GitLab で <code>gitops</code> プロジェクトを確認してください。成功すると次のようなメッセージが表示されます。</p>
+<p class="image-container"><img alt="gitops created branch" src="img/92d8bed1c8a2f404.png"></p>
+<aside class="warning"><p><code>myapp</code> のミラーリングのタイミングによっては数分ほどかかる場合があります。</p>
+</aside>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="ステージング環境へのデプロイ" duration="8">
+        <p>このセクションでは前のセクションで <code>gitops</code> リポジトリにプッシュされたブランチをマージして、ステージング環境に myapp アプリをデプロイします。</p>
+<p class="image-container"><img alt="overview deploy to stg" src="img/2e329604909fb9ef.png"></p>
+<h2 is-upgraded>Merge Request の作成</h2>
+<p>Cloud Build からプッシュされた内容を <code>stg</code> ブランチへマージするための <a href="https://docs.gitlab.com/ee/user/project/merge_requests/" target="_blank">Merge Request</a> を作成します。 Merge Request を利用することにより、コードレビューや承認などのプロセスを簡単に設けることができます。</p>
+<p>GitLab の <code>gitops</code> プロジェクトにアクセスして、メニューから <strong>Repository</strong>、<strong>Compare</strong> をクリックしてください。 Source として <code>myapp-xxxxx</code> ブランチを、Target として <code>stg</code> ブランチを選択して <strong>Compare</strong> ボタンをクリックしてください。</p>
+<p class="image-container"><img alt="compare" src="img/a8a15f558de282a1.png"></p>
+<p><strong>Create merge request</strong> ボタンをクリックしてください。</p>
+<p class="image-container"><img alt="create merge request" src="img/9f74c324d8dbcaae.png"></p>
+<p>適当なタイトルを入力して <strong>Create merge request</strong> ボタンをクリックしてください。</p>
+<p class="image-container"><img alt="new merge request" src="img/a0e839718d14c662.png"></p>
+<p>作成した Merge Request が表示されます。 <strong>Changes</strong> をクリックして<code>stg</code> ブランチとの差分を確認してください。 テンプレートで変数としていたコンテナイメージ部分には最新のタグが埋め込まれていることがわかります。</p>
+<p class="image-container"><img alt="changes" src="img/942977ddd29988fc.png"></p>
+<p><strong>Overview</strong> をクリックして <strong>Merge</strong> ボタンをクリックしてください。</p>
+<p class="image-container"><img alt="overview merge" src="img/764377d0acb6a301.png"></p>
+<p><code>stg</code> ブランチへ変更がマージされ、Config Sync によってステージング環境 (stg クラスタ) に myapp アプリがデプロイされます。</p>
+<h2 is-upgraded>デプロイの確認</h2>
+<p>実際にデプロイできているかを確認します。</p>
+<p>stg クラスタの認証情報を取得してください。</p>
+<pre>gcloud container clusters get-credentials stg \
+  --region asia-northeast1
+</pre>
+<p>myapp アプリの Deployment が作成されていることを<code>kubectl</code>コマンドで確認してください。</p>
+<pre>$ kubectl get deployment -n myapp
+NAME    READY   UP-TO-DATE   AVAILABLE   AGE
+myapp   1/1     1            1           2m40s
+</pre>
+<p>同様に Ingress が作成されていることを確認してください。</p>
+<pre>$ kubectl get ingress -n myapp
+NAME    CLASS    HOSTS   ADDRESS          PORTS   AGE
+myapp   &lt;none&gt;   *       34.xxx.yyy.zzz   80      12m
+</pre>
+<p>次のコマンドで Ingress で作成されたロードバランサーの URL を表示して、ブラウザでアクセスしてください。</p>
+<pre>echo http://$(kubectl get ingress myapp -n myapp --output &#39;go-template=&#123;&#123;(index .status.loadBalancer.ingress 0).ip}}&#39;)
+</pre>
+<p>デプロイが成功していると「Hello, world!」というメッセージが表示されます。</p>
+<p class="image-container"><img alt="hello world" src="img/1ccc8813922f47e1.png"></p>
+<aside class="warning"><p><code>ADDRESS</code> が空欄の場合やブラウザでエラーが表示される場合、Ingress によるロードバランサー作成が完了していません。 正常に表示されるまで何度か試してください。</p>
+</aside>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="本番環境へのデプロイ" duration="13">
+        <p>このセクションでは myapp アプリを本番環境にデプロイします。 本番環境では 2 つの GKE クラスタに myapp アプリがデプロイされます。</p>
+<p class="image-container"><img alt="overview deploy to prd" src="img/77e3b21ed1c9fea8.png"></p>
+<h2 is-upgraded>prd ブランチの作成</h2>
+<p>運用時には本番環境への適用も Merge Request で行いますが、今はまだ<code>prd</code>ブランチがないので<code>stg</code>ブランチを元に作成します。 Merge Request を使ったワークフローは次のセクションで体験します。</p>
+<p>GitLab の<code>giops</code>プロジェクトにアクセスして <strong>Repository</strong>、<strong>Branches</strong>、<strong>New branch</strong> をクリックしてください。</p>
+<p class="image-container"><img alt="new branch" src="img/fc7df8d49be9681c.png"></p>
+<p><strong>Branch name</strong> に <code>prd</code> を入力して、<strong>Create from</strong> に <code>stg</code> を選択して、<strong>Create branch</strong> をクリックしてください。</p>
+<p class="image-container"><img alt="create branch" src="img/244ee9b4d072a2ec.png"></p>
+<p><code>prd</code> ブランチが作成されて Config Sync によって <strong>prd-asia-northeast1</strong> クラスタと <strong>prd-us-central1</strong> クラスタに myapp アプリがデプロイされます。</p>
+<h2 is-upgraded>デプロイの確認</h2>
+<p>実際にデプロイできているかを確認します。</p>
+<p>prd-asia-northeast1 クラスタの認証情報を取得してください。</p>
+<pre>gcloud container clusters get-credentials \
+  prd-asia-northeast1 \
+  --region asia-northeast1
+</pre>
+<p>myapp アプリの Deployment が作成されていることを<code>kubectl</code>コマンドで確認してください。</p>
+<pre>$ kubectl get deployment -n myapp
+NAME    READY   UP-TO-DATE   AVAILABLE   AGE
+myapp   1/1     1            1           2m40s
+</pre>
+<p>同様に Ingress が作成されていることを確認してください。</p>
+<pre>$ kubectl get ingress -n myapp
+NAME    CLASS    HOSTS   ADDRESS          PORTS   AGE
+myapp   &lt;none&gt;   *       34.xxx.yyy.zzz   80      12m
+</pre>
+<p>次のコマンドで Ingress で作成されたロードバランサーの URL を表示して、ブラウザでアクセスしてください。</p>
+<pre>echo http://$(kubectl get ingress myapp -n myapp --output &#39;go-template=&#123;&#123;(index .status.loadBalancer.ingress 0).ip}}&#39;)
+</pre>
+<p>デプロイが成功していると「Hello, world!」というメッセージが表示されます。</p>
+<p class="image-container"><img alt="hello world" src="img/1ccc8813922f47e1.png"></p>
+<p>同じように prd-us-central1 クラスタについても確認します。 prd-us-central1 クラスタの認証情報を取得して、同様の確認をしてください。</p>
+<pre>gcloud container clusters get-credentials \
+  prd-us-central1 \
+  --region us-central1
+</pre>
+<h2 is-upgraded>gitops の main ブランチの更新</h2>
+<p><code>gitops</code> の <code>main</code> ブランチに <code>prd</code> ブランチをマージします。 <code>prd</code>ブランチから<code>main</code>ブランチへの Merge Request を作成してください。</p>
+<p class="image-container"><img alt="update main" src="img/34df491aa75e800f.png"></p>
+<p>このとき必ず <strong>Delete source branch when merge request is accepted.</strong> のチェックを外して Merge Request を作成してください。 そのまま <strong>Merge</strong> ボタンをクリックしてマージしてください。</p>
+<p class="image-container"><img alt="not delete branch" src="img/36d6c4d098f6be3c.png"></p>
+<aside class="special"><p> このラボでは <code>main</code> ブランチを基準となるブランチとして位置づけていますが、ブランチ戦略によっては必要ない場合もあります。<code>stg</code>ブランチを基準ブランチとするなどの戦略も考えられます。また、<code>stg</code>ブランチを作らず、<code>main</code>ブランチをステージング環境にデプロイするという場合もあります。</p>
+</aside>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="デプロイワークフロー体験" duration="16">
+        <p>このセクションでは開発者、QA 担当者、管理者になりきって実際のデプロイワークフローを体験します。</p>
+<p class="image-container"><img alt="workflow" src="img/4bd538df6b269d28.png"></p>
+<h2 is-upgraded>開発</h2>
+<p>まずは開発者としてアプリケーションを改善して、<code>myapp</code> リポジトリに変更をプッシュします。</p>
+<p><code>myapp</code>ディレクトリに移動してください。</p>
+<pre>cd ~/workshop/gitops/myapp
+</pre>
+<p>Cloud Shell Editor で <code>main.py</code> を開いてください。</p>
+<pre>cloudshell edit main.py
+</pre>
+<p>どの Pod がレスポンスを返したかわかるように次のように修正してください。</p>
+<pre><code language="language-python" class="language-python">import os
+from flask import Flask
+
+app = Flask(__name__)
+
+@app.route(&#39;/&#39;)
+def home():
+    return f&#39;&lt;h1&gt;Hello, world! from {os.getenv(&#34;HOSTNAME&#34;)}&lt;/h1&gt;&#39;
+
+if __name__ == &#39;__main__&#39;:
+    app.run(debug=False, host=&#39;0.0.0.0&#39;, port=&#39;5000&#39;)
+</code></pre>
+<p>変更をコミット・プッシュしてください。</p>
+<pre>git commit -am &#34;Print hostname&#34;
+git push
+</pre>
+<p>GitLab の <code>gitops</code> プロジェクトにアクセスしてください。 上部に表示されている <strong>Create merge request</strong> をクリックしてください。</p>
+<p class="image-container"><img alt="create merge request button" src="img/8bfd20f543489ce3.png"></p>
+<p><strong>Change branches</strong> をクリックしてください。</p>
+<p class="image-container"><img alt="new merge request 1" src="img/dedf1fec83873b6f.png"></p>
+<p><strong>Target branch</strong> に <code>stg</code> ブランチを選択して <strong>Compare branches and continue</strong> ボタンをクリックしてください。</p>
+<p class="image-container"><img alt="change target branch" src="img/f34936b5f4dbda86.png"></p>
+<p>QA チームにわかるように Title や Description を入力して <strong>Create merge request</strong> ボタンをクリックしてください。</p>
+<p class="image-container"><img alt="new merge request" src="img/a0e839718d14c662.png"></p>
+<p>この Merge Request が運用チームへの QA テスト依頼兼ステージングデプロイ依頼となります。 以上で開発者としての作業は終了です。</p>
+<h2 is-upgraded>QA テスト</h2>
+<p>ここからは QA 担当者として作業します。 作成された Merge Request をレビュー・承認・マージして、ステージング環境で変更を確認します。</p>
+<p>GitLab の <code>gitops</code> プロジェクトにアクセスして、左メニューから <strong>Merge requests</strong> をクリックしてください。 <strong>Search or filter results...</strong> と表示されているテキストボックスをクリックして、<code>Target-Branch = stg</code> となるように選択肢をクリックしていってください。</p>
+<p class="image-container"><img alt="merge requests" src="img/d514a06388cdb4f3.png"></p>
+<p>次のように開発者が QA チームへの依頼として作成した Merge Request が表示されるのでタイトルをクリックしてください。</p>
+<p><img alt="filtered merge requests" src="img/c7ce1f2f97c6006f.png">]</p>
+<p>Title や Description を確認して <strong>Approve</strong> ボタンをクリックして、<strong>Merge</strong> ボタンをクリックしてください。</p>
+<p class="image-container"><img alt="approve merge" src="img/2e0fbe413f0a63e9.png"></p>
+<p>マージするとステージング環境に新しい myapp アプリがデプロイされるので、ステージング環境にアクセスして動作を確認します。</p>
+<p>ステージング環境の URL を確認します。</p>
+<pre>gcloud container clusters get-credentials stg \
+  --region asia-northeast1
+echo http://$(kubectl get ingress myapp -n myapp --output &#39;go-template=&#123;&#123;(index .status.loadBalancer.ingress 0).ip}}&#39;)
+</pre>
+<p>ブラウザでアクセスして次のように表示されていればアプリの正常な動作確認は完了です。デプロイに数分ほど時間がかかることがあるので、正しく表示されない場合は少し待って試してください。</p>
+<p class="image-container"><img alt="updated myapp" src="img/5ffd4217dc8f8dd5.png"></p>
+<p>ステージング環境での正常な動作が確認できたので、本番環境へのデプロイ準備をします。</p>
+<p>GitLab の <code>gitops</code> プロジェクトにアクセスして、左メニューの <strong>Repository</strong>、<strong>Compare</strong> をクリックしてください。 <strong>Source</strong> に <code>stg</code> ブランチを、<strong>Target</strong> に <code>prd</code> ブランチを選択して <strong>Compare</strong> をクリックしてください。</p>
+<p class="image-container"><img alt="compare stg prd" src="img/357a1fc71037e112.png"></p>
+<p><strong>Create merge request</strong> をクリックしてください。</p>
+<p class="image-container"><img alt="create-merge-request-stg-prd" src="img/d25d560061f45ffd.png"></p>
+<p>Title、Description を適当に入力して、<strong>Delete source branch when merge request is accepted.</strong> のチェックを外して、<strong>Create merge request</strong> ボタンをクリックしてください。</p>
+<p class="image-container"><img alt="new merge request prd" src="img/d87a966ec36c5c16.png"></p>
+<aside class="special"><p><a href="https://docs.gitlab.com/ee/user/project/protected_branches.html" target="_blank">Protected branch</a>を設定することで、ブランチを削除できないようにできます。また、マージできるユーザーを限定することも可能です。</p>
+</aside>
+<p>以上で QA 担当者としての作業は完了になります。</p>
+<h2 is-upgraded>本番デプロイ</h2>
+<p>最後に、本番環境の管理者として作業します。 本番環境への Merge Request を承認・マージして本番環境へ myapp アプリをデプロイします。</p>
+<p>GitLab の gitops プロジェクトにアクセスしてください。 左メニューの <strong>Merge requests</strong> をクリックして、<code>Target-Branch = prd</code> で本番環境への Merge Request を検索してください。myapp の Merge Request をクリックしてください。</p>
+<p class="image-container"><img alt="search prd mr" src="img/2d4b330ace5c315a.png"></p>
+<p>Title や Description を確認して <strong>Approve</strong> ボタンをクリックして、<strong>Merge</strong> ボタンをクリックしてください。</p>
+<p class="image-container"><img alt="merge prd" src="img/e5756759a4c4df83.png"></p>
+<p>Config Sync により、2 つのクラスタに <code>prd</code> ブランチの内容が同期されます。</p>
+<p>次のコマンドで 2 つのクラスタの URL を表示して動作確認をしてください。</p>
+<pre>gcloud container clusters get-credentials \
+  prd-asia-northeast1 \
+  --region asia-northeast1
+echo http://$(kubectl get ingress myapp -n myapp --output &#39;go-template=&#123;&#123;(index .status.loadBalancer.ingress 0).ip}}&#39;)
+gcloud container clusters get-credentials \
+  prd-us-central1 \
+  --region us-central1
+echo http://$(kubectl get ingress myapp -n myapp --output &#39;go-template=&#123;&#123;(index .status.loadBalancer.ingress 0).ip}}&#39;)
+</pre>
+<p>ステージング環境と同様に次のように表示されていれば本番環境へのデプロイも成功しています。</p>
+<p class="image-container"><img alt="updated myapp" src="img/5ffd4217dc8f8dd5.png"></p>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="おわりに" duration="3">
+        <p>以上でこのラボは終了です。おつかれさまでした。</p>
+<p>作成したリソースのクリーンアップを忘れないようにしてください。 ラボ用のプロジェクトを作成した場合は、プロジェクトごと削除してください。</p>
+<p><strong>ナビゲーションメニュー</strong> &gt; <strong>IAMと管理</strong> &gt; <strong>設定</strong></p>
+<p>GitLab のプロジェクトやグループも不要な場合は削除してください。</p>
+
+
+      </google-codelab-step>
+    
+  </google-codelab>
+
+  <script src="https://storage.googleapis.com/codelab-elements/native-shim.js"></script>
+  <script src="https://storage.googleapis.com/codelab-elements/custom-elements.min.js"></script>
+  <script src="https://storage.googleapis.com/codelab-elements/prettify.js"></script>
+  <script src="https://storage.googleapis.com/codelab-elements/codelab-elements.js"></script>
+  <script src="//support.google.com/inapp/api.js"></script>
+
+</body>
+</html>

@@ -1,0 +1,28 @@
+{
+  "environment": "web",
+  "format": "html",
+  "prefix": "https://storage.googleapis.com",
+  "mainga": "UA-191798031-4",
+  "updated": "2021-11-12T05:16:03Z",
+  "id": "config-sync-with-gitlab",
+  "duration": 118,
+  "title": "Anthos Config Management と GitLab による GitOps パイプラインの構築",
+  "summary": "GitLab と Anthos Config Management を使って、複数 Kubernetes クラスタを管理する GitOps パイプラインを構築します。",
+  "source": "anthos/config-sync-with-gitlab/LAB.md",
+  "theme": "",
+  "status": [
+    "[published]"
+  ],
+  "category": [
+    "applicationmodernization"
+  ],
+  "tags": [
+    "anthos",
+    "anthosconfigmanagement",
+    "cloud",
+    "gitlab",
+    "kubernetes"
+  ],
+  "feedback": "https://github.com/ShawnLabo/google-cloud-tutorials/issues",
+  "url": "config-sync-with-gitlab"
+}
